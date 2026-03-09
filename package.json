@@ -1,0 +1,24 @@
+{
+  "name": "indmoney-reviewbot",
+  "version": "1.0.0",
+  "description": "IND Money weekly review pulse — themes, quotes, one-pager, email from Play Store reviews",
+  "type": "module",
+  "scripts": {
+    "fetch-reviews": "node scripts/cli-fetch-reviews.js",
+    "fetch-reviews:py": "python3 phase1/fetch_reviews.py",
+    "fetch-reviews:playwright": "FETCH_METHOD=playwright node scripts/cli-fetch-reviews.js",
+    "phase2a": "python3 phase2a/theme_discovery.py",
+    "phase2b": "python3 phase2b/classify_reviews.py",
+    "postinstall": "npx playwright install chromium 2>/dev/null || true",
+    "weekly": "node scripts/cli-weekly.js",
+    "email": "node scripts/cli-email.js",
+    "ui": "cd phase5 && npm run dev"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "google-play-scraper": "^10.1.2",
+    "playwright": "^1.49.0"
+  }
+}

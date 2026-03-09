@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GROWW Weekly Review Pulse</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      background: #09090b;
+      color: #e4e4e7;
+      margin: 0;
+      padding: 24px;
+      line-height: 1.5;
+    }
+    main { max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 8px; }
+    .subtitle { color: #a1a1aa; margin-bottom: 24px; }
+    section { margin-bottom: 32px; }
+    label { display: block; margin-bottom: 8px; font-weight: 500; }
+    input[type="number"], input[type="email"], input[type="text"] {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #3f3f46;
+      background: #18181b;
+      color: #e4e4e7;
+    }
+    input[type="number"] { width: 80px; }
+    input[type="email"] { width: 260px; }
+    input[type="text"] { width: 200px; }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
+    .btn {
+      padding: 8px 20px;
+      border-radius: 6px;
+      border: none;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:disabled { background: #3f3f46; cursor: not-allowed; }
+    .btn-email { background: #16a34a; color: #fff; }
+    .error { color: #f87171; margin-bottom: 16px; }
+    .success { color: #86efac; font-size: 14px; }
+    .card {
+      padding: 16px;
+      background: #18181b;
+      border-radius: 8px;
+      border: 1px solid #3f3f46;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .newsletter {
+      font-family: Georgia, 'Times New Roman', serif;
+      text-align: left;
+      max-width: 100%;
+    }
+    .newsletter h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #fafafa;
+      margin: 0 0 0.5rem 0;
+      border-bottom: 1px solid #3f3f46;
+      padding-bottom: 0.5rem;
+    }
+    .newsletter h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #e4e4e7;
+      margin: 1.25rem 0 0.5rem 0;
+    }
+    .newsletter h3 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #d4d4d8;
+      margin: 1rem 0 0.4rem 0;
+    }
+    .newsletter p {
+      font-size: 0.95rem;
+      line-height: 1.65;
+      color: #a1a1aa;
+      margin: 0 0 0.75rem 0;
+    }
+    .newsletter ul, .newsletter ol {
+      margin: 0.5rem 0 1rem 0;
+      padding-left: 1.5rem;
+      color: #a1a1aa;
+    }
+    .newsletter li {
+      margin-bottom: 0.6rem;
+      line-height: 1.6;
+    }
+    .newsletter strong { color: #e4e4e7; font-weight: 600; }
+    .newsletter em { color: #d4d4d8; }
+    h2 { font-size: 1.25rem; margin-bottom: 12px; }
+    .note { margin-top: 8px; font-size: 13px; color: #a1a1aa; }
+    code { background: #27272a; padding: 2px 6px; border-radius: 4px; }
+    .divider { margin-top: 32px; padding-top: 24px; border-top: 1px solid #3f3f46; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>GROWW Weekly Review Pulse</h1>
+    <p class="subtitle">Generate a one-page weekly note from Play Store reviews and optionally send it by email.</p>
+
+    <section>
+      <label>Weeks back (reviews range)</label>
+      <div class="row">
+        <input type="number" id="weeksBack" min="8" max="12" value="10" />
+        <button type="button" class="btn btn-primary" id="btnGenerate">Generate one-pager</button>
+      </div>
+    </section>
+
+    <p id="error" class="error" style="display: none;"></p>
+
+    <section id="pulseSection" style="display: none;">
+      <h2>Weekly One-Page Note</h2>
+      <p id="fallbackNote" class="note" style="display: none; color: #fbbf24;">Generated from existing theme data (Groq rate limit). Full pipeline will run when API limit resets.</p>
+      <div class="card newsletter" id="pulseContent"></div>
+    </section>
+
+    <section class="divider">
+      <h2>Send email</h2>
+      <p class="subtitle" style="margin-bottom: 12px;">Optional: enter recipient and name for a personalised email. Uses EMAIL_RECIPIENT from .env if left blank.</p>
+      <div class="row">
+        <input type="email" id="recipient" placeholder="Recipient email" />
+        <input type="text" id="recipientName" placeholder="Recipient name (e.g. Vaishnavi)" />
+        <button type="button" class="btn btn-email" id="btnSendEmail">Send email to me</button>
+      </div>
+      <p id="emailStatus" class="success" style="display: none;"></p>
+    </section>
+  </main>
+
+  <script>
+    const weeksBack = document.getElementById('weeksBack');
+    const btnGenerate = document.getElementById('btnGenerate');
+    const pulseSection = document.getElementById('pulseSection');
+    const pulseContent = document.getElementById('pulseContent');
+    const errorEl = document.getElementById('error');
+    const recipient = document.getElementById('recipient');
+    const recipientName = document.getElementById('recipientName');
+    const btnSendEmail = document.getElementById('btnSendEmail');
+    const emailStatus = document.getElementById('emailStatus');
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.style.display = msg ? 'block' : 'none';
+    }
+
+    btnGenerate.addEventListener('click', async function () {
+      btnGenerate.disabled = true;
+      pulseSection.style.display = 'none';
+      showError(null);
+      try {
+        const res = await fetch('/api/weekly-pulse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ weeksBack: Number(weeksBack.value) || 10 })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to generate pulse');
+        if (data.pulseHtml) {
+          pulseContent.innerHTML = data.pulseHtml;
+          pulseContent.classList.add('newsletter');
+        } else {
+          pulseContent.textContent = data.pulse ?? '';
+          pulseContent.classList.remove('newsletter');
+        }
+        const fallbackNote = document.getElementById('fallbackNote');
+        if (fallbackNote) fallbackNote.style.display = data.fromFallback ? 'block' : 'none';
+        if (data.pulse) pulseSection.style.display = 'block';
+      } catch (e) {
+        showError(e.message);
+      } finally {
+        btnGenerate.disabled = false;
+      }
+    });
+
+    btnSendEmail.addEventListener('click', async function () {
+      emailStatus.style.display = 'none';
+      showError(null);
+      try {
+        const res = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipient: recipient.value.trim() || undefined,
+            recipientName: recipientName.value.trim() || undefined
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to send email');
+        emailStatus.textContent = data.sent ? 'Email sent successfully.' : 'Draft saved (dry-run).';
+        emailStatus.style.display = 'block';
+      } catch (e) {
+        showError(e.message);
+      }
+    });
+  </script>
+</body>
+</html>

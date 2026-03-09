@@ -1,0 +1,66 @@
+# Weekly pulse: runs every Sunday at 9:45 PM CST (Monday 03:45 UTC).
+# Same pipeline as scripts/scheduler.py: 8 weeks, 1000 reviews → one-pager → email to fixed recipient.
+#
+# Required GitHub Secrets:
+#   GROQ_API_KEY, GEMINI_API_KEY, EMAIL_SENDER, EMAIL_PASSWORD
+# Optional: SMTP_HOST (default smtp.gmail.com), SMTP_PORT (default 587)
+
+name: Weekly Pulse
+
+on:
+  schedule:
+    # 9:45 PM CST (America/Chicago) = Monday 03:45 UTC (Sunday evening CST)
+    - cron: "45 3 * * 1"
+  workflow_dispatch:
+    # Allow manual run from Actions tab
+
+env:
+  WEEKS_BACK: "8"
+  MAX_REVIEWS: "1000"
+  APP_ID: "in.indwealth"
+  SMTP_HOST: "smtp.gmail.com"
+  SMTP_PORT: "587"
+
+jobs:
+  weekly-pulse:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Phase 1 — Fetch reviews
+        run: python3 phase1/fetch_reviews.py
+
+      - name: Phase 2a — Theme discovery
+        run: python3 phase2a/theme_discovery.py
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+
+      - name: Phase 2b — Classify reviews
+        run: python3 phase2b/classify_reviews.py
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+
+      - name: Phase 3 — Weekly one-pager
+        run: bash scripts/setup-venv-and-run-phase3.sh
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Phase 4 — Send email
+        run: |
+          python3 phase4/draft_email.py --send \
+            --recipient vaishnavishantharam09@gmail.com \
+            --recipient-name "Vaishnavi"
+        env:
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          SMTP_HOST: ${{ env.SMTP_HOST }}
+          SMTP_PORT: ${{ env.SMTP_PORT }}

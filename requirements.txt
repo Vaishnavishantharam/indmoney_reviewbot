@@ -1,0 +1,8 @@
+# Python dependencies (Phase 1 + Phase 2a/2b + Phase 3 + Web UI)
+google-play-scraper>=1.2.6
+langdetect>=1.0.9
+groq>=0.4.0
+google-genai
+markdown>=3.4.0
+flask>=2.0.0
+apscheduler>=3.10.0

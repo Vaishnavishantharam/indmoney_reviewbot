@@ -1,0 +1,10 @@
+node_modules/
+.venv/
+.env
+reviews/*.json
+reviews/*.csv
+themes/
+# output/   — uncomment to hide generated pulse/legend from git; leave visible to show in file tree
+*.log
+logs/
+.DS_Store
