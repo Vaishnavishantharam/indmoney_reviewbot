@@ -1,29 +1,29 @@
-## App Usability
+## UX/Usability
 
-The app's user interface, navigation, and overall ease of use, including issues with clutter, difficulty in using certain features, and cumbersome updates.
+Reviews mention issues with the app's user interface, navigation, and overall user experience, including difficulties with finding features, understanding the layout, and using the app efficiently.
 
-*90 reviews*
+*80 reviews*
 
-## Performance and Stability
+## Performance
 
-The app's speed, stability, and ability to handle user requests, including issues with slow loading times, crashes, freezes, and errors.
+The app's speed, reliability, and functionality are problematic, with issues such as slow loading, crashes, technical glitches, and difficulties with data synchronization and updates.
 
-*10 reviews*
+*7 reviews*
 
-## Technical Issues
+## Support
 
-The presence of technical glitches, errors, and bugs that affect the app's functionality, such as incorrect calculations, failed transactions, and inability to execute trades.
+Reviews express frustration with the app's customer support, citing unresponsive or unhelpful support teams, long wait times, and unresolved issues, leading to a negative experience.
 
-*102 reviews*
+*53 reviews*
 
-## Support and Assistance
+## Features
 
-The quality and responsiveness of the app's customer support, including issues with timely and helpful responses to user queries and concerns.
+The app lacks certain features or has inadequate functionality, including limited payment options, insufficient analytics, and missing tools for tracking investments, which hampers the user experience.
 
-*66 reviews*
+*121 reviews*
 
-## Features and Functionality
+## Bugs/Issues
 
-The app's functionality, including the availability of features such as trading, investing, and tracking, and user requests for additional features and improvements.
+Reviews report various bugs and issues with the app, including problems with transactions, account management, and feature functionality, which cause inconvenience and financial losses for users.
 
-*163 reviews*
+*89 reviews*

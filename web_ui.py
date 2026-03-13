@@ -2,7 +2,8 @@
 """
 Python-only Web UI for GROWW Weekly Review Pulse.
 Run from repo root: python3 web_ui.py
-Then open http://127.0.0.1:5000 (no npm required).
+Then open http://127.0.0.1:5001 (no npm required).
+Uses port 5001 to avoid conflict with macOS AirPlay on 5000.
 """
 import os
 import subprocess
@@ -45,7 +46,13 @@ def run_cmd(cmd, args, env=None):
         env=env,
     )
     if r.returncode != 0:
-        raise RuntimeError(r.stderr.strip() or f"Exit {r.returncode}")
+        err = (r.stderr or "").strip()
+        out = (r.stdout or "").strip()
+        if err and out:
+            msg = f"{err}\n{out}"
+        else:
+            msg = err or out or f"Exit {r.returncode}"
+        raise RuntimeError(msg)
     return r
 
 
@@ -101,6 +108,17 @@ def index():
     return render_template("weekly_ui.html")
 
 
+def _nice_error(msg):
+    """Turn generic 'Exit N' into a helpful message."""
+    s = (msg or "").strip()
+    if s in ("Exit 1", "Exit 2") or (s.startswith("Exit ") and len(s) < 10):
+        return (
+            "Pipeline failed. Check: (1) .env in project root has GROQ_API_KEY and GEMINI_API_KEY, "
+            "(2) you ran the server from the project folder, (3) run: pip install -r requirements.txt"
+        )
+    return s or "Pipeline failed."
+
+
 @app.route("/api/weekly-pulse", methods=["POST"])
 def api_weekly_pulse():
     try:
@@ -137,8 +155,32 @@ def api_weekly_pulse():
             return jsonify(error="No weekly pulse generated"), 500
         pulse_html = markdown.markdown(pulse, extensions=["nl2br"])
         return jsonify(pulse=pulse, pulseHtml=pulse_html, themeLegend=theme_legend or "", fromFallback=used_fallback)
+    except RuntimeError as e:
+        err_msg = _nice_error(str(e))
+        pulse, theme_legend = read_latest_pulse_and_legend()
+        if pulse:
+            pulse_html = markdown.markdown(pulse, extensions=["nl2br"])
+            return jsonify(
+                pulse=pulse,
+                pulseHtml=pulse_html,
+                themeLegend=theme_legend or "",
+                fromFallback=True,
+                error=f"Regeneration failed: {err_msg}. Showing last saved one-pager below.",
+            )  # 200 so the link works and content is shown
+        return jsonify(error=err_msg), 500
     except Exception as e:
-        return jsonify(error=str(e)), 500
+        err_msg = _nice_error(str(e))
+        pulse, theme_legend = read_latest_pulse_and_legend()
+        if pulse:
+            pulse_html = markdown.markdown(pulse, extensions=["nl2br"])
+            return jsonify(
+                pulse=pulse,
+                pulseHtml=pulse_html,
+                themeLegend=theme_legend or "",
+                fromFallback=True,
+                error=f"Regeneration failed: {err_msg}. Showing last saved one-pager below.",
+            )  # 200 so the link works and content is shown
+        return jsonify(error=err_msg), 500
 
 
 @app.route("/api/send-email", methods=["POST"])
@@ -162,4 +204,5 @@ def api_send_email():
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    port = int(os.environ.get("PORT", 5001))
+    app.run(host="127.0.0.1", port=port, debug=False)

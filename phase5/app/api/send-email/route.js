@@ -2,7 +2,22 @@ import { spawnSync } from "child_process";
 import path from "path";
 import fs from "fs";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 const REPO_ROOT = path.resolve(process.cwd(), "..");
+
+function isVercelOrNoPipeline() {
+  if (process.env.VERCEL || process.env.VERCEL_URL || process.env.VERCEL_ENV) return true;
+  try {
+    const inCwd = path.join(process.cwd(), "phase4", "draft_email.py");
+    const inParent = path.join(process.cwd(), "..", "phase4", "draft_email.py");
+    if (fs.existsSync(inCwd) || fs.existsSync(inParent)) return false;
+  } catch {
+    return true;
+  }
+  return true;
+}
 
 function loadEnv() {
   const envPath = path.join(REPO_ROOT, ".env");
@@ -20,6 +35,15 @@ function loadEnv() {
 }
 
 export async function POST(request) {
+  if (isVercelOrNoPipeline()) {
+    return Response.json(
+      {
+        error:
+          "Send email is not available on Vercel. Use « Run weekly pulse in cloud » — the workflow will send the email when it finishes.",
+      },
+      { status: 501 }
+    );
+  }
   try {
     loadEnv();
     const body = await request.json().catch(() => ({}));
@@ -38,17 +62,23 @@ export async function POST(request) {
 
     if (r.status !== 0) {
       const stderr = (r.stderr || "").trim();
-      return Response.json(
-        { error: stderr || `Exit ${r.status}` },
-        { status: 500 }
-      );
+      const stdout = (r.stdout || "").trim();
+      let msg =
+        stderr ||
+        stdout ||
+        (r.status != null ? `Send failed (exit ${r.status}).` : "Send email is not available here. Use « Run weekly pulse in cloud » to get the report by email.");
+      if (msg === "Exit null" || msg.includes("Exit null")) {
+        msg = "Send email is not available here. Use « Run weekly pulse in cloud » — the workflow will send the email when it finishes.";
+      }
+      return Response.json({ error: msg }, { status: 500 });
     }
 
     return Response.json({ sent: true });
   } catch (err) {
-    return Response.json(
-      { error: err.message || "Send failed" },
-      { status: 500 }
-    );
+    let msg = err.message || "Send failed";
+    if (msg === "Exit null" || msg.includes("Exit null")) {
+      msg = "Send email is not available here. Use « Run weekly pulse in cloud » — the workflow will send the email when it finishes.";
+    }
+    return Response.json({ error: msg }, { status: 500 });
   }
 }

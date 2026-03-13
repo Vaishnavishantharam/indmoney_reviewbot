@@ -9,6 +9,7 @@ export default function Home() {
   const [themeLegend, setThemeLegend] = useState(null);
   const [error, setError] = useState(null);
   const [emailStatus, setEmailStatus] = useState(null);
+  const [triggerStatus, setTriggerStatus] = useState(null);
   const [recipient, setRecipient] = useState("");
   const [recipientName, setRecipientName] = useState("");
 
@@ -28,9 +29,29 @@ export default function Home() {
       setPulse(data.pulse ?? null);
       setThemeLegend(data.themeLegend ?? null);
     } catch (e) {
-      setError(e.message);
+      let msg = e.message || "Failed to generate pulse";
+      if (msg === "Exit null" || msg.includes("Exit null")) {
+        msg =
+          "Generate one-pager is not available here. Use « Run weekly pulse in cloud » to trigger the pipeline; you'll receive the email when it finishes.";
+      }
+      setError(msg);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleTriggerCloud() {
+    setTriggerStatus(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/trigger-workflow", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to trigger");
+      setTriggerStatus(data.message || "Pipeline started. Check your email in a few minutes.");
+    } catch (e) {
+      let msg = e.message || "Failed to trigger";
+      if (msg === "Exit null" || msg.includes("Exit null")) msg = "Trigger not configured. Add GITHUB_TOKEN and GITHUB_REPO in Vercel.";
+      setError(msg);
     }
   }
 
@@ -50,7 +71,12 @@ export default function Home() {
       if (!res.ok) throw new Error(data.error || "Failed to send email");
       setEmailStatus(data.sent ? "Email sent successfully." : "Draft saved (dry-run).");
     } catch (e) {
-      setError(e.message);
+      let msg = e.message || "Failed to send email";
+      if (msg === "Exit null" || msg.includes("Exit null")) {
+        msg =
+          "Send email is not available here. Use « Run weekly pulse in cloud » — the workflow will send the email when it finishes.";
+      }
+      setError(msg);
     }
   }
 
@@ -59,8 +85,11 @@ export default function Home() {
       <h1 style={{ fontSize: "1.75rem", fontWeight: 700, marginBottom: 8 }}>
         GROWW Weekly Review Pulse
       </h1>
-      <p style={{ color: "#a1a1aa", marginBottom: 24 }}>
+      <p style={{ color: "#a1a1aa", marginBottom: 8 }}>
         Generate a one-page weekly note from Play Store reviews and optionally send it by email.
+      </p>
+      <p style={{ color: "#71717a", fontSize: 13, marginBottom: 24 }}>
+        On the hosted site: use <strong>Run weekly pulse in cloud</strong> to run the pipeline and receive the one-pager by email. Generate one-pager and Send email work when running locally.
       </p>
 
       <section style={{ marginBottom: 32 }}>
@@ -98,7 +127,26 @@ export default function Home() {
         >
           {loading ? "Running…" : "Generate one-pager"}
         </button>
+        <button
+          type="button"
+          onClick={handleTriggerCloud}
+          style={{
+            marginLeft: 8,
+            padding: "8px 20px",
+            borderRadius: 6,
+            border: "1px solid #3f3f46",
+            background: "transparent",
+            color: "#a1a1aa",
+            fontWeight: 500,
+            cursor: "pointer",
+          }}
+        >
+          Run weekly pulse in cloud
+        </button>
       </section>
+      {triggerStatus && (
+        <p style={{ color: "#86efac", fontSize: 14, marginBottom: 16 }}>{triggerStatus}</p>
+      )}
 
       {error && (
         <p style={{ color: "#f87171", marginBottom: 16 }}>{error}</p>

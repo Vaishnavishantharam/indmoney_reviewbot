@@ -159,6 +159,8 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to generate pulse');
+        if (data.error) showError(data.error);
+        else showError(null);
         if (data.pulseHtml) {
           pulseContent.innerHTML = data.pulseHtml;
           pulseContent.classList.add('newsletter');

@@ -12,7 +12,8 @@
     "postinstall": "npx playwright install chromium 2>/dev/null || true",
     "weekly": "node scripts/cli-weekly.js",
     "email": "node scripts/cli-email.js",
-    "ui": "cd phase5 && npm run dev"
+    "ui": "cd phase5 && npm run dev",
+    "ui:py": "python3 web_ui.py"
   },
   "engines": {
     "node": ">=18"

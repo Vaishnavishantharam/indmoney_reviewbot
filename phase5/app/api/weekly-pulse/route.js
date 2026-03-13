@@ -2,8 +2,25 @@ import { spawnSync } from "child_process";
 import path from "path";
 import fs from "fs";
 
-// Next.js runs from phase5/; repo root is parent.
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+// Next.js runs from phase5/; repo root is parent. On Vercel, only phase5 is deployed so pipeline isn't available.
 const REPO_ROOT = path.resolve(process.cwd(), "..");
+
+function isVercelOrNoPipeline() {
+  // Vercel sets these at runtime
+  if (process.env.VERCEL || process.env.VERCEL_URL || process.env.VERCEL_ENV) return true;
+  // If phase1 isn't in cwd or parent, we're in a deployment that only has phase5 (e.g. Vercel with Root Directory = phase5)
+  try {
+    const inCwd = path.join(process.cwd(), "phase1", "fetch_reviews.py");
+    const inParent = path.join(process.cwd(), "..", "phase1", "fetch_reviews.py");
+    if (fs.existsSync(inCwd) || fs.existsSync(inParent)) return false;
+  } catch {
+    // Safe default: assume pipeline not available
+  }
+  return true;
+}
 
 function loadEnv() {
   const envPath = path.join(REPO_ROOT, ".env");
@@ -28,12 +45,28 @@ function run(cmd, args) {
   });
   if (r.status !== 0) {
     const stderr = (r.stderr || "").trim();
-    throw new Error(stderr || `Exit ${r.status}`);
+    const stdout = (r.stdout || "").trim();
+    const msg =
+      stderr ||
+      stdout ||
+      (r.status != null ? `Pipeline step failed (exit ${r.status}).` : "Pipeline not available here. Use « Run weekly pulse in cloud » or run the app locally.");
+    throw new Error(msg);
   }
   return r;
 }
 
 export async function POST(request) {
+  // On Vercel (or when pipeline files are missing) we cannot run the Python pipeline. Use "Run weekly pulse in cloud" instead.
+  if (isVercelOrNoPipeline()) {
+    return Response.json(
+      {
+        error:
+          "Generate one-pager is not available here. Use « Run weekly pulse in cloud » to trigger the pipeline; you'll receive the email when it finishes.",
+        code: "VERCEL_USE_TRIGGER",
+      },
+      { status: 501 }
+    );
+  }
   try {
     loadEnv();
     const body = await request.json().catch(() => ({}));
@@ -58,9 +91,11 @@ export async function POST(request) {
 
     return Response.json({ pulse, themeLegend });
   } catch (err) {
-    return Response.json(
-      { error: err.message || "Pipeline failed" },
-      { status: 500 }
-    );
+    let msg = err.message || "Pipeline failed";
+    if (msg === "Exit null" || msg.includes("Exit null")) {
+      msg =
+        "Generate one-pager is not available here. Use « Run weekly pulse in cloud » to trigger the pipeline; you'll receive the email when it finishes.";
+    }
+    return Response.json({ error: msg }, { status: 500 });
   }
 }
