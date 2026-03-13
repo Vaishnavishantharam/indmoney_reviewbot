@@ -241,9 +241,28 @@ Write exactly 3 action ideas. Each must be a concrete, actionable next step for 
 ---
 Output ONLY the markdown above. Aim for 300–${MAX_WORDS} words. Professional tone. No extra intro or sign-off.`;
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(prompt);
-  const raw = (result.response?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+  // Model availability can vary by API version; try a short fallback list.
+  const modelCandidates = [
+    "gemini-2.0-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-flash-001",
+  ];
+  let raw = "";
+  let lastErr = null;
+  for (const modelName of modelCandidates) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      raw = (result.response?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+      if (raw) break;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (!raw) {
+    const msg = lastErr?.message || "Gemini returned no text";
+    throw new Error(msg);
+  }
   const words = raw.split(/\s+/).length;
   const pulse = words > MAX_WORDS + 100 ? raw.split(/\s+/).slice(0, MAX_WORDS).join(" ") : raw;
   const dateStr = new Date().toISOString().slice(0, 10);
