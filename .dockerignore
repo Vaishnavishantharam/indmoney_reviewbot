@@ -1,0 +1,32 @@
+# Dependencies and env
+node_modules/
+.venv/
+.env
+.env.*
+!.env.example
+
+# Git and IDE
+.git/
+.gitignore
+.cursor/
+*.md
+!README.md
+
+# Frontend (not needed for backend image)
+phase5/
+
+# Optional: keep image smaller (reviews/themes/output are created empty in container)
+reviews/*.json
+reviews/*.csv
+themes/*
+output/*
+
+# Misc
+*.log
+logs/
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/

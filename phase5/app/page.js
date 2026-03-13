@@ -18,8 +18,10 @@ export default function Home() {
     setError(null);
     setPulse(null);
     setThemeLegend(null);
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL?.trim();
+    const apiUrl = backendUrl ? `${backendUrl.replace(/\/$/, "")}/api/weekly-pulse` : "/api/weekly-pulse";
     try {
-      const res = await fetch("/api/weekly-pulse", {
+      const res = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ weeksBack }),

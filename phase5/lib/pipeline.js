@@ -241,11 +241,10 @@ Write exactly 3 action ideas. Each must be a concrete, actionable next step for 
 ---
 Output ONLY the markdown above. Aim for 300–${MAX_WORDS} words. Professional tone. No extra intro or sign-off.`;
 
-  // Model availability can vary by API version; try a short fallback list.
+  // Use current Gemini model IDs (1.5-flash-001 is deprecated/removed for v1beta).
   const modelCandidates = [
+    "gemini-2.5-flash",
     "gemini-2.0-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-1.5-flash-001",
   ];
   let raw = "";
   let lastErr = null;

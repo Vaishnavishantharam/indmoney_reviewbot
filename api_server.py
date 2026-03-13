@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""
+Backend API for GROWW Weekly Review Pulse.
+Runs the full Python pipeline (Phase 1 → 2a → 2b → 3) and returns JSON.
+Deploy to Railway, Render, or any Python host. Frontend (Vercel) calls this API.
+
+Run from repo root:
+  pip install -r requirements.txt
+  python api_server.py
+
+Set PORT in env (e.g. 8000). CORS is enabled for your Vercel frontend origin.
+"""
+import os
+import subprocess
+
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+
+# Import pipeline helpers from existing web_ui
+from web_ui import (
+    REPO_ROOT,
+    load_env,
+    run_cmd,
+    get_python,
+    has_grouped_themes,
+    read_latest_pulse_and_legend,
+)
+
+
+def run_phase3_only(env):
+    """Run Phase 3 only (one-pager from existing themes_grouped_*.json). Uses Python directly for Docker compatibility."""
+    run_cmd(get_python(), ["phase3/weekly_pulse.py"], env=env)
+
+app = Flask(__name__)
+CORS(app, origins=os.environ.get("CORS_ORIGINS", "*").split(","))
+
+
+def _nice_error(msg):
+    s = (msg or "").strip()
+    if s in ("Exit 1", "Exit 2") or (s.startswith("Exit ") and len(s) < 10):
+        return (
+            "Pipeline failed. Check GROQ_API_KEY and GEMINI_API_KEY in env, "
+            "and that phases (phase1, 2a, 2b, 3) run correctly."
+        )
+    return s or "Pipeline failed."
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify(ok=True)
+
+
+@app.route("/api/weekly-pulse", methods=["POST"])
+def api_weekly_pulse():
+    try:
+        env = load_env() or os.environ.copy()
+        data = request.get_json(force=True, silent=True) or {}
+        weeks_back = data.get("weeksBack", 10)
+        env["WEEKS_BACK"] = str(weeks_back)
+        py = get_python()
+
+        run_cmd(py, ["phase1/fetch_reviews.py"], env=env)
+
+        used_fallback = False
+        try:
+            run_cmd(py, ["phase2a/theme_discovery.py"], env=env)
+            run_cmd(py, ["phase2b/classify_reviews.py"], env=env)
+            run_cmd(py, ["phase3/weekly_pulse.py"], env=env)
+        except RuntimeError as e:
+            err_str = str(e)
+            if "429" in err_str or "Rate limit" in err_str or "rate_limit" in err_str:
+                if has_grouped_themes():
+                    run_phase3_only(env)
+                    used_fallback = True
+                else:
+                    return jsonify(
+                        error="Groq rate limit (429). Try again later."
+                    ), 500
+            else:
+                raise
+
+        pulse, theme_legend = read_latest_pulse_and_legend()
+        if not pulse:
+            return jsonify(error="No weekly pulse generated"), 500
+        return jsonify(
+            pulse=pulse,
+            themeLegend=theme_legend or "",
+            fromFallback=used_fallback,
+        )
+    except RuntimeError as e:
+        err_msg = _nice_error(str(e))
+        pulse, theme_legend = read_latest_pulse_and_legend()
+        if pulse:
+            return jsonify(
+                pulse=pulse,
+                themeLegend=theme_legend or "",
+                fromFallback=True,
+                error=f"Regeneration failed: {err_msg}. Showing last saved one-pager.",
+            )
+        return jsonify(error=err_msg), 500
+    except Exception as e:
+        return jsonify(error=_nice_error(str(e))), 500
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="0.0.0.0", port=port, debug=False)
