@@ -1,6 +1,6 @@
 # Deploy on Vercel
 
-The **Next.js app (phase5)** can be deployed on Vercel. The full "Generate one-pager" pipeline (Python) does **not** run on Vercel; use **"Run weekly pulse in cloud"** to trigger the GitHub Actions workflow instead. You'll receive the email when the workflow finishes.
+The **Next.js app (phase5)** can be deployed on Vercel. On Vercel, **Generate one-pager** runs a Node.js pipeline (fetch reviews → Groq themes → classify → Gemini one-pager) and **displays the result on screen**. **Send email to me** sends the one-pager to the recipient you enter using your SMTP credentials.
 
 ## Steps
 
@@ -8,16 +8,20 @@ The **Next.js app (phase5)** can be deployed on Vercel. The full "Generate one-p
 
 2. **In Vercel:** [vercel.com/new](https://vercel.com/new) → Import your Git repository.
 
-3. **Set the Root Directory:** In the project settings (or during import), set **Root Directory** to `phase5`. (Leave "Framework Preset" as Next.js.)
+3. **Set the Root Directory:** In the project settings (or during import), set **Root Directory** to `phase5`.
 
-4. **Environment variables (optional for trigger):**  
-   To enable **"Run weekly pulse in cloud"** on the deployed site, add in Vercel → Project → Settings → Environment Variables:
-   - `GITHUB_TOKEN` — A [GitHub Personal Access Token](https://github.com/settings/tokens) with `repo` scope (or at least `workflow` for triggering actions).
-   - `GITHUB_REPO` — Your repo in the form `owner/repo`, e.g. `Vaishnavishantharam/indmoney_reviewbot`.
+4. **Environment variables** (Vercel → Project → Settings → Environment Variables):
 
-5. **Deploy.** The UI will be live. "Generate one-pager" will show a message to use the cloud button; "Run weekly pulse in cloud" will start the workflow (if the env vars are set).
+   | Variable | Required | Description |
+   |----------|----------|-------------|
+   | `GROQ_API_KEY` | Yes | For theme discovery and classification ([console.groq.com](https://console.groq.com/keys)) |
+   | `GEMINI_API_KEY` | Yes | For the weekly one-pager ([aistudio.google.com](https://aistudio.google.com/apikey)) |
+   | `EMAIL_SENDER` | For Send email | Your sending email (e.g. Gmail) |
+   | `EMAIL_PASSWORD` | For Send email | Gmail app password or SMTP password |
+   | `SMTP_HOST` | Optional | Default `smtp.gmail.com` |
+   | `SMTP_PORT` | Optional | Default `587` |
+   | `EMAIL_RECIPIENT` | Optional | Default recipient when none entered in the form |
+   | `GITHUB_TOKEN` | Optional | For "Run weekly pulse in cloud" (PAT with `repo` + `workflow`) |
+   | `GITHUB_REPO` | Optional | e.g. `Vaishnavishantharam/indmoney_reviewbot` |
 
-## Notes
-
-- **Generate one-pager** (instant, in-browser) only works when you run the app **locally** (or on a server with Python and the full repo). On Vercel it returns a short message and suggests using the cloud button.
-- **Run weekly pulse in cloud** triggers the same workflow that runs on schedule (Sunday 9:45 PM CST). Ensure [GitHub Actions secrets](https://github.com/Vaishnavishantharam/indmoney_reviewbot/settings/secrets/actions) are set: `GROQ_API_KEY`, `GEMINI_API_KEY`, `EMAIL_SENDER`, `EMAIL_PASSWORD`.
+5. **Deploy.** Generate one-pager and Send email work on the hosted site. "Run weekly pulse in cloud" is optional (triggers GitHub Actions workflow).

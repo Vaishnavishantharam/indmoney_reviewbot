@@ -65,6 +65,7 @@ export default function Home() {
         body: JSON.stringify({
           recipient: recipient || undefined,
           recipientName: recipientName || undefined,
+          pulse: pulse ?? undefined,
         }),
       });
       const data = await res.json();
@@ -85,11 +86,8 @@ export default function Home() {
       <h1 style={{ fontSize: "1.75rem", fontWeight: 700, marginBottom: 8 }}>
         GROWW Weekly Review Pulse
       </h1>
-      <p style={{ color: "#a1a1aa", marginBottom: 8 }}>
+      <p style={{ color: "#a1a1aa", marginBottom: 24 }}>
         Generate a one-page weekly note from Play Store reviews and optionally send it by email.
-      </p>
-      <p style={{ color: "#71717a", fontSize: 13, marginBottom: 24 }}>
-        On the hosted site: use <strong>Run weekly pulse in cloud</strong> to run the pipeline and receive the one-pager by email. Generate one-pager and Send email work when running locally.
       </p>
 
       <section style={{ marginBottom: 32 }}>
@@ -229,14 +227,15 @@ export default function Home() {
           />
           <button
             onClick={handleSendEmail}
+            disabled={!pulse}
             style={{
               padding: "8px 20px",
               borderRadius: 6,
               border: "none",
-              background: "#16a34a",
+              background: pulse ? "#16a34a" : "#3f3f46",
               color: "#fff",
               fontWeight: 500,
-              cursor: "pointer",
+              cursor: pulse ? "pointer" : "not-allowed",
             }}
           >
             Send email to me

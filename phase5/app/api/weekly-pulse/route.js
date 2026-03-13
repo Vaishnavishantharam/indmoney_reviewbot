@@ -4,6 +4,7 @@ import fs from "fs";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 // Next.js runs from phase5/; repo root is parent. On Vercel, only phase5 is deployed so pipeline isn't available.
 const REPO_ROOT = path.resolve(process.cwd(), "..");
@@ -56,21 +57,26 @@ function run(cmd, args) {
 }
 
 export async function POST(request) {
-  // On Vercel (or when pipeline files are missing) we cannot run the Python pipeline. Use "Run weekly pulse in cloud" instead.
+  const body = await request.json().catch(() => ({}));
+  const weeksBack = body.weeksBack ?? 10;
+  const env = { ...process.env, WEEKS_BACK: String(weeksBack) };
+
+  // On Vercel (or when Python pipeline is missing) run the Node.js pipeline so one-pager displays on screen.
   if (isVercelOrNoPipeline()) {
-    return Response.json(
-      {
-        error:
-          "Generate one-pager is not available here. Use « Run weekly pulse in cloud » to trigger the pipeline; you'll receive the email when it finishes.",
-        code: "VERCEL_USE_TRIGGER",
-      },
-      { status: 501 }
-    );
+    try {
+      const { runNodePipeline } = await import("../../../lib/pipeline.js");
+      const { pulse, themeLegend } = await runNodePipeline(env);
+      return Response.json({ pulse, themeLegend });
+    } catch (err) {
+      return Response.json(
+        { error: err.message || "Pipeline failed" },
+        { status: 500 }
+      );
+    }
   }
+
   try {
     loadEnv();
-    const body = await request.json().catch(() => ({}));
-    const weeksBack = body.weeksBack ?? 10;
     if (weeksBack) process.env.WEEKS_BACK = String(weeksBack);
 
     run("python3", ["phase1/fetch_reviews.py"]);

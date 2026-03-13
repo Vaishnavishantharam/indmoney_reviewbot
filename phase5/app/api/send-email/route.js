@@ -35,21 +35,58 @@ function loadEnv() {
 }
 
 export async function POST(request) {
+  const body = await request.json().catch(() => ({}));
+  const recipient = body.recipient?.trim();
+  const recipientName = body.recipientName?.trim();
+  const pulse = body.pulse?.trim();
+
   if (isVercelOrNoPipeline()) {
-    return Response.json(
-      {
-        error:
-          "Send email is not available on Vercel. Use « Run weekly pulse in cloud » — the workflow will send the email when it finishes.",
-      },
-      { status: 501 }
-    );
+    try {
+      const sender = (process.env.EMAIL_SENDER || "").trim();
+      const password = (process.env.EMAIL_PASSWORD || "").trim();
+      const host = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
+      const port = parseInt(process.env.SMTP_PORT || "587", 10) || 587;
+      const to = recipient || process.env.EMAIL_RECIPIENT || sender;
+      if (!sender || !password) {
+        return Response.json(
+          { error: "Email not configured. Set EMAIL_SENDER and EMAIL_PASSWORD in Vercel Environment Variables." },
+          { status: 503 }
+        );
+      }
+      if (!pulse) {
+        return Response.json(
+          { error: "Generate the one-pager first, then click Send email. The pulse content is required." },
+          { status: 400 }
+        );
+      }
+      const nodemailer = (await import("nodemailer")).default;
+      const transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: port === 465,
+        auth: { user: sender, pass: password },
+        ...(port === 587 && { requireTLS: true }),
+      });
+      const greeting = recipientName ? `Hi ${recipientName},\n\n` : "Hi,\n\n";
+      const text = greeting + pulse;
+      const dateLabel = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      await transporter.sendMail({
+        from: sender,
+        to,
+        subject: `GROWW Weekly Review Pulse -- ${dateLabel}`,
+        text,
+      });
+      return Response.json({ sent: true });
+    } catch (err) {
+      return Response.json(
+        { error: err.message || "Failed to send email" },
+        { status: 500 }
+      );
+    }
   }
+
   try {
     loadEnv();
-    const body = await request.json().catch(() => ({}));
-    const recipient = body.recipient?.trim();
-    const recipientName = body.recipientName?.trim();
-
     const args = ["phase4/draft_email.py", "--send"];
     if (recipient) args.push("--recipient", recipient);
     if (recipientName) args.push("--recipient-name", recipientName);
