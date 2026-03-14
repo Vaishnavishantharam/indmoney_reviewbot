@@ -222,33 +222,38 @@ async function generateOnePager(themesWithReviews, geminiKey) {
   }
   const quotesBlock = quotes.slice(0, 20).join("\n");
 
-  const prompt = `Generate a weekly one-page note for product leadership from the app store review data below. Use ONLY this data. No PII.
+  const themeListForPrompt = entries.map((t, i) => `Theme ${i + 1}: ${t.label} (${t.count} reviews)`).join("\n");
 
-**Theme summary (top 3 by volume):**
+  const prompt = `Generate a weekly one-page note for product leadership. Use ONLY the data below. No PII.
+
+**Top 3 themes (use these exact names and counts):**
+${themeListForPrompt}
+
+**Theme context:**
 ${themeSummary}
 
-**Sample anonymized quotes (choose from these only):**
+**Sample anonymized quotes (choose from these only for the 3 quotes):**
 ${quotesBlock}
 
-**REQUIRED OUTPUT FORMAT:**
-## Weekly One-Page Note
-### Top 3 Themes
-List exactly 3 themes as separate bullet points. Each bullet must be: theme name, review count in parentheses, then 1–2 sentences. Use a new line for each theme. Example format:
-- **Theme A** (N reviews): One or two sentences.
-- **Theme B** (N reviews): One or two sentences.
-- **Theme C** (N reviews): One or two sentences.
-### 3 User Quotes
-Write exactly 3 user quotes. Use or lightly paraphrase from the sample quotes above. One line per quote.
-### 3 Action Ideas
-Write exactly 3 action ideas. Each must be a concrete, actionable next step for product or support.
----
-Output ONLY the markdown above. Aim for 300–${MAX_WORDS} words. Professional tone. No extra intro or sign-off.`;
+**REQUIRED OUTPUT FORMAT — reply with exactly this structure (use the labels THEME1:, THEME2:, THEME3:):**
 
-  // Use current Gemini model IDs (1.5-flash-001 is deprecated/removed for v1beta).
-  const modelCandidates = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-  ];
+THEME_SUMMARIES:
+THEME1:
+[1-2 sentences on what users are saying about Theme 1 only.]
+THEME2:
+[1-2 sentences on what users are saying about Theme 2 only.]
+THEME3:
+[1-2 sentences on what users are saying about Theme 3 only.]
+
+QUOTES:
+[Exactly 3 user quotes, one per line. Use or lightly paraphrase from the sample quotes only.]
+
+ACTIONS:
+[Exactly 3 action ideas, one per line. Concrete next steps for product or support.]
+
+Do not add any other sections or text. Professional tone.`;
+
+  const modelCandidates = ["gemini-2.5-flash", "gemini-2.0-flash"];
   let raw = "";
   let lastErr = null;
   for (const modelName of modelCandidates) {
@@ -265,11 +270,64 @@ Output ONLY the markdown above. Aim for 300–${MAX_WORDS} words. Professional t
     const msg = lastErr?.message || "Gemini returned no text";
     throw new Error(msg);
   }
-  const words = raw.split(/\s+/).length;
-  const pulse = words > MAX_WORDS + 100 ? raw.split(/\s+/).slice(0, MAX_WORDS).join(" ") : raw;
-  const dateStr = new Date().toISOString().slice(0, 10);
+
+  const themeSummaries = [];
+  const themeBlockMatch = raw.match(/THEME_SUMMARIES:[\s\S]*?(?=QUOTES:|$)/i);
+  if (themeBlockMatch) {
+    const block = themeBlockMatch[0];
+    const parts = block.split(/\s*THEME[123]:\s*/i).map((s) => s.replace(/^THEME_SUMMARIES:\s*/i, "").trim());
+    for (const p of parts) {
+      const text = p.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+      if (text.length > 15) themeSummaries.push(text);
+      if (themeSummaries.length >= 3) break;
+    }
+  }
+  if (themeSummaries.length === 0) {
+    const fallback = raw.match(/THEME_SUMMARIES:\s*([\s\S]*?)(?=QUOTES:|$)/i);
+    if (fallback) {
+      const block = fallback[1].trim().split(/\n\n+/);
+      for (let i = 0; i < Math.min(3, block.length); i++) {
+        const t = block[i].replace(/\n/g, " ").trim();
+        if (t) themeSummaries.push(t);
+      }
+    }
+  }
+  while (themeSummaries.length < 3) {
+    themeSummaries.push(entries[themeSummaries.length] ? `Summary for ${entries[themeSummaries.length].label}.` : "—");
+  }
+
+  const top3Section = entries
+    .map((t, i) => `- **${t.label}** (${t.count} reviews): ${themeSummaries[i] || ""}`)
+    .join("\n");
+
+  let quotesSection = "";
+  const quotesMatch = raw.match(/QUOTES:\s*([\s\S]*?)(?=ACTIONS:|$)/i);
+  if (quotesMatch) {
+    const block = quotesMatch[1].trim().split(/\n/).filter(Boolean).slice(0, 3);
+    quotesSection = block.map((q) => q.replace(/^[\d.)\-\*]+\s*/, "").trim()).join("\n");
+  }
+  if (!quotesSection) quotesSection = "—";
+
+  let actionsSection = "";
+  const actionsMatch = raw.match(/ACTIONS:\s*([\s\S]*?)$/i);
+  if (actionsMatch) {
+    const block = actionsMatch[1].trim().split(/\n/).filter(Boolean).slice(0, 3);
+    actionsSection = block.map((a) => a.replace(/^[\d.)\-\*]+\s*/, "").trim()).join("\n");
+  }
+  if (!actionsSection) actionsSection = "—";
+
+  const pulseBody = `## Weekly One-Page Note
+### Top 3 Themes
+${top3Section}
+
+### 3 User Quotes
+${quotesSection}
+
+### 3 Action Ideas
+${actionsSection}`;
+
   const weekHeader = `Week of ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
-  const contentWithHeader = `${weekHeader}\n\n${pulse}`;
+  const contentWithHeader = `${weekHeader}\n\n${pulseBody}`;
 
   let themeLegend = "";
   for (const e of themesWithReviews) {
