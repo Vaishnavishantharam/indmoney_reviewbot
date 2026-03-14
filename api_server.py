@@ -45,6 +45,17 @@ def _nice_error(msg):
     return s or "Pipeline failed."
 
 
+@app.route("/", methods=["GET"])
+def index():
+    return jsonify(
+        service="GROWW Weekly Pulse API",
+        docs={
+            "health": "GET /health",
+            "weekly_pulse": "POST /api/weekly-pulse (body: {\"weeksBack\": 10})",
+        },
+    )
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify(ok=True)
