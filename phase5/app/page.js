@@ -64,6 +64,10 @@ export default function Home() {
   async function handleSendEmail() {
     setEmailStatus(null);
     setError(null);
+    if (!pulse) {
+      setError("Generate the one-pager first, then click Send email.");
+      return;
+    }
     try {
       const res = await fetch("/api/send-email", {
         method: "POST",
@@ -82,6 +86,9 @@ export default function Home() {
       if (msg === "Exit null" || msg.includes("Exit null")) {
         msg =
           "Send email is not available here. Use « Run weekly pulse in cloud » — the workflow will send the email when it finishes.";
+      }
+      if (msg.includes("not configured") || msg.includes("EMAIL_SENDER") || msg.includes("EMAIL_PASSWORD")) {
+        msg += " In Vercel: Project → Settings → Environment Variables, add EMAIL_SENDER (your Gmail) and EMAIL_PASSWORD (Gmail App Password from myaccount.google.com/apppasswords). Then redeploy.";
       }
       setError(msg);
     }
@@ -212,7 +219,7 @@ export default function Home() {
       <section style={{ marginTop: 32, paddingTop: 24, borderTop: "1px solid #3f3f46" }}>
         <h2 style={{ fontSize: "1.25rem", marginBottom: 16 }}>Send email</h2>
         <p style={{ color: "#a1a1aa", marginBottom: 12, fontSize: 14 }}>
-          Optional: enter recipient and name for a personalised email. Uses EMAIL_RECIPIENT from .env if left blank.
+          Generate the one-pager first, then send it by email. Optional: enter recipient and name. To enable: set <strong>EMAIL_SENDER</strong> and <strong>EMAIL_PASSWORD</strong> (Gmail App Password) in Vercel → Settings → Environment Variables, then redeploy.
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 12 }}>
           <input

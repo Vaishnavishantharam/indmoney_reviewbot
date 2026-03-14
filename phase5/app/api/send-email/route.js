@@ -49,7 +49,10 @@ export async function POST(request) {
       const to = recipient || process.env.EMAIL_RECIPIENT || sender;
       if (!sender || !password) {
         return Response.json(
-          { error: "Email not configured. Set EMAIL_SENDER and EMAIL_PASSWORD in Vercel Environment Variables." },
+          {
+            error:
+              "Email not configured. Set EMAIL_SENDER and EMAIL_PASSWORD in Vercel (Settings → Environment Variables). Use a Gmail App Password for EMAIL_PASSWORD: myaccount.google.com/apppasswords",
+          },
           { status: 503 }
         );
       }
@@ -78,10 +81,12 @@ export async function POST(request) {
       });
       return Response.json({ sent: true });
     } catch (err) {
-      return Response.json(
-        { error: err.message || "Failed to send email" },
-        { status: 500 }
-      );
+      let errMsg = err.message || "Failed to send email";
+      if (err.code === "EAUTH" || errMsg.toLowerCase().includes("invalid login")) {
+        errMsg =
+          "SMTP auth failed. Use a Gmail App Password (not your normal password): myaccount.google.com/apppasswords. Set it as EMAIL_PASSWORD in Vercel.";
+      }
+      return Response.json({ error: errMsg }, { status: 500 });
     }
   }
 
