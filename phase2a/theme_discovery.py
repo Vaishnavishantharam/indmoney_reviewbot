@@ -78,6 +78,33 @@ def split_into_batches(texts, n_batches):
     return [texts[i : i + size] for i in range(0, len(texts), size)][:n_batches]
 
 
+def _call_gemini(prompt: str) -> str:
+    """Call Gemini API; return generated text. Use when USE_GEMINI_FOR_THEMES=1 to avoid Groq 429."""
+    try:
+        from google import genai
+    except ImportError:
+        print("Missing dependency. Run: pip install google-genai")
+        sys.exit(1)
+    api_key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
+    if not api_key:
+        print("GEMINI_API_KEY is not set. Set it when using USE_GEMINI_FOR_THEMES=1")
+        sys.exit(1)
+    client = genai.Client(api_key=api_key)
+    try:
+        config = genai.types.GenerateContentConfig(max_output_tokens=1024, temperature=0.3)
+        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt, config=config)
+    except (AttributeError, TypeError):
+        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    text = getattr(response, "text", None) or (
+        response.candidates[0].content.parts[0].text
+        if response.candidates and response.candidates[0].content.parts
+        else None
+    )
+    if not text:
+        raise RuntimeError("Gemini returned no text")
+    return text.strip()
+
+
 def _get_client():
     try:
         from groq import Groq
@@ -89,8 +116,7 @@ def _get_client():
         print("GROQ_API_KEY is not set.")
         print("  Option 1: Add one line to the .env file in the project root:")
         print("    GROQ_API_KEY=gsk_your_actual_key_here")
-        print("  Option 2: Run with: export GROQ_API_KEY=gsk_xxx && python3 phase2a/theme_discovery.py")
-        print("  Get a key at: https://console.groq.com/keys")
+        print("  Option 2: Set USE_GEMINI_FOR_THEMES=1 and GEMINI_API_KEY to use Gemini instead (avoids Groq 429).")
         sys.exit(1)
     return Groq(api_key=api_key)
 
@@ -240,28 +266,114 @@ For each final theme, give the theme label on one line, then a short one-line de
     return themes[:MAX_THEMES]
 
 
+def _build_themes_prompt(review_texts, batch_label=""):
+    """Shared prompt for theme discovery (used by both Groq and Gemini)."""
+    parts = [
+        f"[Review {i+1}]\n{(t or '')[:MAX_CHARS_PER_REVIEW]}"
+        for i, t in enumerate(review_texts)
+        if (t or "").strip()
+    ]
+    combined = ""
+    for p in parts:
+        if len(combined) + len(p) + 2 > MAX_PROMPT_REVIEW_CHARS:
+            break
+        combined = (combined + "\n\n" + p) if combined else p
+    combined = combined[:MAX_PROMPT_REVIEW_CHARS]
+    return combined, f"""Given these app store reviews, identify 3 to 5 distinct themes (e.g. UX/Usability, Performance, Features, Support, Bugs/Issues).
+For each theme, give the theme label on one line, then a short one-line description on the next line. No numbering. Maximum {MAX_THEMES} themes.
+Format:
+Label1
+Short description for label1
+Label2
+Short description for label2
+
+Reviews:
+{combined}
+"""
+
+
+def call_gemini_themes(review_texts, batch_label=""):
+    """Use Gemini for theme discovery (avoids Groq 429)."""
+    combined, prompt = _build_themes_prompt(review_texts, batch_label)
+    n_in = len([p for p in combined.split("\n\n") if p.strip()])
+    print(f"  {batch_label}Using Gemini for {n_in} reviews")
+    text = _call_gemini(prompt)
+    themes = _parse_theme_lines_with_descriptions(text)
+    if not themes:
+        themes = [{"label": t["label"], "description": t.get("description", "")} for t in DEFAULT_THEMES]
+    return themes[:MAX_THEMES]
+
+
+def call_gemini_merge_themes(list_of_theme_lists):
+    """Use Gemini to merge theme lists."""
+    combined = ""
+    for i, theme_list in enumerate(list_of_theme_lists):
+        combined += f"Batch {i+1}:\n"
+        for t in theme_list:
+            label = t.get("label", t) if isinstance(t, dict) else t
+            desc = t.get("description", "") if isinstance(t, dict) else ""
+            combined += f"  {label}: {desc}\n"
+        combined += "\n"
+    prompt = f"""These theme lists were generated from different batches of the same app's reviews. Merge them into a single list of 3 to 5 distinct themes that best cover all feedback.
+For each final theme, give the theme label on one line, then a short one-line description on the next line. No numbering. Maximum {MAX_THEMES} themes.
+
+{combined}
+"""
+    text = _call_gemini(prompt)
+    themes = _parse_theme_lines_with_descriptions(text)
+    if not themes:
+        seen = set()
+        for lst in list_of_theme_lists:
+            for t in lst:
+                label = t.get("label", t) if isinstance(t, dict) else t
+                k = (label or "").strip().lower()
+                if k and k not in seen:
+                    seen.add(k)
+                    themes.append({"label": label.strip(), "description": t.get("description", "") if isinstance(t, dict) else ""})
+                    if len(themes) >= MAX_THEMES:
+                        break
+            if len(themes) >= MAX_THEMES:
+                break
+    if not themes:
+        themes = list(DEFAULT_THEMES)
+    return themes[:MAX_THEMES]
+
+
 def main():
     load_dotenv()
     THEMES_DIR.mkdir(parents=True, exist_ok=True)
     reviews_path = get_latest_reviews_path()
-    print(f"Phase 2a — Theme discovery ({NUM_BATCHES} batches)")
+    use_gemini = os.environ.get("USE_GEMINI_FOR_THEMES", "").strip().lower() in ("1", "true", "yes")
+    print(f"Phase 2a — Theme discovery ({NUM_BATCHES} batches, {'Gemini' if use_gemini else 'Groq'})")
     print(f"  Input: {reviews_path}")
     texts, date_str = load_all_reviews(reviews_path)
     texts = [t for t in texts if (t or "").strip()]
     print(f"  Total reviews: {len(texts)}")
-    client = _get_client()
     batches = split_into_batches(texts, NUM_BATCHES)
     batch_themes = []
-    for i, batch in enumerate(batches):
-        th = call_groq_themes(client, batch, batch_label=f"Batch {i+1}/{len(batches)}: ")
-        batch_themes.append(th)
-        if i < len(batches) - 1:
-            time.sleep(3)
-    if len(batch_themes) > 1:
-        print(f"  Merging {len(batch_themes)} theme lists into one...")
-        themes = call_groq_merge_themes(client, batch_themes)
+    if use_gemini:
+        for i, batch in enumerate(batches):
+            th = call_gemini_themes(batch, batch_label=f"Batch {i+1}/{len(batches)}: ")
+            batch_themes.append(th)
+            if i < len(batches) - 1:
+                time.sleep(1)
+        if len(batch_themes) > 1:
+            print(f"  Merging {len(batch_themes)} theme lists into one...")
+            themes = call_gemini_merge_themes(batch_themes)
+        else:
+            themes = batch_themes[0] if batch_themes else []
     else:
-        themes = batch_themes[0] if batch_themes else []
+        client = _get_client()
+        for i, batch in enumerate(batches):
+            th = call_groq_themes(client, batch, batch_label=f"Batch {i+1}/{len(batches)}: ")
+            batch_themes.append(th)
+            if i < len(batches) - 1:
+                time.sleep(3)
+        if len(batch_themes) > 1:
+            print(f"  Merging {len(batch_themes)} theme lists into one...")
+            themes = call_groq_merge_themes(client, batch_themes)
+        else:
+            themes = batch_themes[0] if batch_themes else []
     print(f"  Final themes: {[t.get('label', t) for t in themes]}")
     out_path = THEMES_DIR / f"theme_labels_{date_str}.json"
     with open(out_path, "w", encoding="utf-8") as f:

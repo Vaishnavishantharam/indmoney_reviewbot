@@ -89,6 +89,60 @@ def normalize_theme_label(returned: str, theme_labels: list) -> str:
     return theme_labels[0]
 
 
+def _call_gemini(prompt: str) -> str:
+    """Call Gemini API; return generated text. Use when USE_GEMINI_FOR_THEMES=1 to avoid Groq 429."""
+    try:
+        from google import genai
+    except ImportError:
+        print("Missing dependency. Run: pip install google-genai")
+        sys.exit(1)
+    api_key = (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or "").strip()
+    if not api_key:
+        print("GEMINI_API_KEY is not set. Set it when using USE_GEMINI_FOR_THEMES=1")
+        sys.exit(1)
+    client = genai.Client(api_key=api_key)
+    try:
+        config = genai.types.GenerateContentConfig(max_output_tokens=1024, temperature=0.2)
+        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt, config=config)
+    except (AttributeError, TypeError):
+        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    text = getattr(response, "text", None) or (
+        response.candidates[0].content.parts[0].text
+        if response.candidates and response.candidates[0].content.parts
+        else None
+    )
+    if not text:
+        raise RuntimeError("Gemini returned no text")
+    return text.strip()
+
+
+def call_gemini_classify_chunk(theme_labels, chunk_reviews):
+    """Classify one chunk using Gemini (avoids Groq 429). Returns dict index_str -> theme label."""
+    themes_str = ", ".join(theme_labels)
+    lines = []
+    for r in chunk_reviews:
+        idx = r["index"]
+        text = (r.get("text") or "")[:400]
+        lines.append(f"Index {idx}: {text}")
+    block = "\n".join(lines)
+    prompt = f"""Themes (use exactly one per review; return the exact theme label as given): {themes_str}
+
+For each review below, assign exactly one theme from the list. Reply with a JSON object mapping index to theme label, e.g. {{"0": "UX/Usability", "1": "Performance"}}. Use string keys. Return only the JSON object, no other text.
+
+Reviews:
+{block}
+"""
+    text = _call_gemini(prompt)
+    m = re.search(r"\{[\s\S]*\}", text)
+    if not m:
+        return {}
+    try:
+        raw = json.loads(m.group())
+        return {k: normalize_theme_label(v, theme_labels) for k, v in raw.items()}
+    except json.JSONDecodeError:
+        return {}
+
+
 def call_groq_classify_chunk(theme_labels, chunk_reviews):
     """Classify one chunk of reviews. chunk_reviews = list of {index, text}. Returns dict index_str -> theme label."""
     try:
@@ -98,9 +152,7 @@ def call_groq_classify_chunk(theme_labels, chunk_reviews):
         sys.exit(1)
     api_key = (os.environ.get("GROQ_API_KEY") or "").strip()
     if not api_key:
-        print("GROQ_API_KEY is not set.")
-        print("  Option 1: Add GROQ_API_KEY=... to .env in the project root.")
-        print("  Option 2: Run with: export GROQ_API_KEY=gsk_xxx && python3 phase2b/classify_reviews.py")
+        print("GROQ_API_KEY is not set. Set USE_GEMINI_FOR_THEMES=1 and GEMINI_API_KEY to use Gemini instead.")
         sys.exit(1)
     client = Groq(api_key=api_key)
     themes_str = ", ".join(theme_labels)
@@ -265,13 +317,14 @@ def main():
         t.get("label", t) if isinstance(t, dict) else t
         for t in themes
     ]
-    print(f"Phase 2b — Review classification (chunk size {CHUNK_SIZE})")
+    use_gemini = os.environ.get("USE_GEMINI_FOR_THEMES", "").strip().lower() in ("1", "true", "yes")
+    print(f"Phase 2b — Review classification (chunk size {CHUNK_SIZE}, {'Gemini' if use_gemini else 'Groq'})")
     print(f"  Reviews: {reviews_path} ({len(reviews)} reviews)")
     print(f"  Themes: {theme_labels}")
     review_id_to_theme = {}
     chunks = list(chunk_list(reviews, CHUNK_SIZE))
     for i, chunk in enumerate(chunks):
-        result = call_groq_classify_chunk(theme_labels, chunk)
+        result = call_gemini_classify_chunk(theme_labels, chunk) if use_gemini else call_groq_classify_chunk(theme_labels, chunk)
         for k, v in result.items():
             review_id_to_theme[str(k)] = v
         print(f"  Chunk {i+1}/{len(chunks)}: {len(result)} classified")
