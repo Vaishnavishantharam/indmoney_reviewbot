@@ -19,8 +19,8 @@ export default function Home() {
     setError(null);
     setPulse(null);
     setThemeLegend(null);
-    // Use same-origin proxy to avoid CORS; proxy calls Railway backend
-    const apiUrl = "/api/proxy-weekly-pulse";
+    // Use Vercel API (runs Node pipeline with Gemini only; no Railway/Groq)
+    const apiUrl = "/api/weekly-pulse";
     try {
       const res = await fetch(apiUrl, {
         method: "POST",
@@ -35,7 +35,7 @@ export default function Home() {
       let msg = e.message || "Failed to generate pulse";
       if (msg === "Failed to fetch" || e.name === "TypeError") {
         msg =
-          "Cannot reach the backend. The request goes through Vercel to Railway; check that the Railway backend is up (open https://indmoneyreviewbot-production.up.railway.app/health in a new tab).";
+          "Cannot reach the API. Check your connection and that GEMINI_API_KEY is set in Vercel Environment Variables.";
       } else if (msg === "Exit null" || msg.includes("Exit null")) {
         msg =
           "Generate one-pager is not available here. Use « Run weekly pulse in cloud » to trigger the pipeline; you'll receive the email when it finishes.";
