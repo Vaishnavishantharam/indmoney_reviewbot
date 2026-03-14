@@ -45,7 +45,7 @@ def load_dotenv():
 
 THEMES_DIR = _REPO_ROOT / "themes"
 MAX_THEMES = 5
-NUM_BATCHES = 2  # Send reviews in this many batches, then merge theme lists
+NUM_BATCHES = 1  # Fewer Groq calls to avoid 429 (use 2 for more coverage, 1 for rate limit)
 # Cap total review text per batch to stay within context (~128k).
 MAX_CHARS_PER_REVIEW = 400
 MAX_PROMPT_REVIEW_CHARS = 80_000
@@ -175,7 +175,7 @@ Reviews:
                 raise
             if attempt == 2:
                 raise
-            wait = 60 * (attempt + 1)
+            wait = 90 * (attempt + 1)
             print(f"  Groq rate limit (429). Waiting {wait}s before retry {attempt + 1}/2...")
             time.sleep(wait)
     text = (response.choices[0].message.content or "").strip()
@@ -216,7 +216,7 @@ For each final theme, give the theme label on one line, then a short one-line de
                 raise
             if attempt == 2:
                 raise
-            wait = 60 * (attempt + 1)
+            wait = 90 * (attempt + 1)
             print(f"  Groq rate limit (429). Waiting {wait}s before retry {attempt + 1}/2...")
             time.sleep(wait)
     text = (response.choices[0].message.content or "").strip()
@@ -256,7 +256,7 @@ def main():
         th = call_groq_themes(client, batch, batch_label=f"Batch {i+1}/{len(batches)}: ")
         batch_themes.append(th)
         if i < len(batches) - 1:
-            time.sleep(0.5)
+            time.sleep(3)
     if len(batch_themes) > 1:
         print(f"  Merging {len(batch_themes)} theme lists into one...")
         themes = call_groq_merge_themes(client, batch_themes)

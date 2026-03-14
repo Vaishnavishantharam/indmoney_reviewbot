@@ -18,8 +18,8 @@ sys.path.insert(0, str(_REPO_ROOT))
 
 REVIEWS_DIR = _REPO_ROOT / "reviews"
 THEMES_DIR = _REPO_ROOT / "themes"
-# Reviews per batch; configurable via CLASSIFY_CHUNK_SIZE (default 50)
-CHUNK_SIZE = int(os.environ.get("CLASSIFY_CHUNK_SIZE", "50"))
+# Reviews per batch; configurable via CLASSIFY_CHUNK_SIZE (default 100 = fewer Groq calls)
+CHUNK_SIZE = int(os.environ.get("CLASSIFY_CHUNK_SIZE", "100"))
 
 
 def load_dotenv():
@@ -275,7 +275,7 @@ def main():
         for k, v in result.items():
             review_id_to_theme[str(k)] = v
         print(f"  Chunk {i+1}/{len(chunks)}: {len(result)} classified")
-        time.sleep(0.5)
+        time.sleep(2)
     out_path = THEMES_DIR / f"themes_{date_str}.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({"themes": themes, "reviewIdToTheme": review_id_to_theme}, f, indent=2)
