@@ -191,35 +191,13 @@ export default function Home() {
               {pulse}
             </ReactMarkdown>
           </div>
-          <p style={{ marginTop: 8, fontSize: 13, color: "#a1a1aa" }}>
-            Also saved to <code>output/weekly-pulse_*.md</code> and <code>*.txt</code>
-          </p>
-        </section>
-      )}
-
-      {themeLegend && (
-        <section style={{ marginBottom: 32 }}>
-          <h2 style={{ fontSize: "1.25rem", marginBottom: 12 }}>Theme legend</h2>
-          <div
-            style={{
-              padding: 16,
-              background: "#18181b",
-              borderRadius: 8,
-              border: "1px solid #3f3f46",
-              whiteSpace: "pre-wrap",
-              fontSize: 13,
-              lineHeight: 1.5,
-            }}
-          >
-            {themeLegend}
-          </div>
         </section>
       )}
 
       <section style={{ marginTop: 32, paddingTop: 24, borderTop: "1px solid #3f3f46" }}>
         <h2 style={{ fontSize: "1.25rem", marginBottom: 16 }}>Send email</h2>
         <p style={{ color: "#a1a1aa", marginBottom: 12, fontSize: 14 }}>
-          Generate the one-pager first, then send it by email. Optional: enter recipient and name. To enable: set <strong>EMAIL_SENDER</strong> and <strong>EMAIL_PASSWORD</strong> (Gmail App Password) in Vercel → Settings → Environment Variables, then redeploy.
+          Send the one-pager by email. Optionally enter recipient and name below.
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 12 }}>
           <input

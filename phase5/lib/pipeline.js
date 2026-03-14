@@ -233,7 +233,10 @@ ${quotesBlock}
 **REQUIRED OUTPUT FORMAT:**
 ## Weekly One-Page Note
 ### Top 3 Themes
-Write exactly 3 themes. For each: theme name, review count in parentheses, then 1–2 sentences on what users are saying.
+List exactly 3 themes as separate bullet points. Each bullet must be: theme name, review count in parentheses, then 1–2 sentences. Use a new line for each theme. Example format:
+- **Theme A** (N reviews): One or two sentences.
+- **Theme B** (N reviews): One or two sentences.
+- **Theme C** (N reviews): One or two sentences.
 ### 3 User Quotes
 Write exactly 3 user quotes. Use or lightly paraphrase from the sample quotes above. One line per quote.
 ### 3 Action Ideas
