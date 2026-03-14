@@ -116,39 +116,71 @@ def _call_gemini(prompt: str) -> str:
     return text.strip()
 
 
+def _extract_json_from_response(text):
+    """Extract a JSON object from model output (handles markdown code blocks and extra text)."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    stripped = re.sub(r"^```(?:json)?\s*", "", text)
+    stripped = re.sub(r"\s*```\s*$", "", stripped)
+    start = stripped.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    for i in range(start, len(stripped)):
+        if stripped[i] == "{":
+            depth += 1
+        elif stripped[i] == "}":
+            depth -= 1
+            if depth == 0:
+                raw_str = stripped[start : i + 1]
+                try:
+                    return json.loads(raw_str)
+                except json.JSONDecodeError:
+                    pass
+                break
+    m = re.search(r"\{[\s\S]*\}", stripped)
+    if m:
+        try:
+            return json.loads(m.group())
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
 def call_gemini_classify_chunk(theme_labels, chunk_reviews):
     """Classify one chunk using Gemini (avoids Groq 429). Returns dict index_str -> theme label."""
-    themes_str = ", ".join(theme_labels)
+    themes_str = " | ".join(f'"{t}"' for t in theme_labels)
     lines = []
     for r in chunk_reviews:
-        idx = r["index"]
+        idx = r.get("index", len(lines))
         text = (r.get("text") or "")[:400]
-        lines.append(f"Index {idx}: {text}")
+        lines.append(f"{idx}: {text}")
     block = "\n".join(lines)
-    prompt = f"""Themes (use exactly one per review; return the exact theme label as given): {themes_str}
+    prompt = f"""You are classifying app store reviews into exactly one theme each.
 
-For each review below, assign exactly one theme from the list. Reply with a JSON object only. Keys must be the index number as string: "0", "1", "2", etc. Values must be the exact theme label from the list above.
+THEMES (use only these exact strings): {themes_str}
+
+For each line below, the number before the colon is the review index. Assign exactly one theme from the list above to each review.
+
+Return ONLY a valid JSON object. Keys = index as string (e.g. "0", "1", "2"). Values = exact theme string from the list.
 Example: {{"0": "UX/Usability", "1": "Performance", "2": "Bugs/Issues"}}
-Return only the JSON object, no other text or markdown.
 
-Reviews:
+Reviews (index: text):
 {block}
-"""
+
+JSON only:"""
     text = _call_gemini(prompt)
-    m = re.search(r"\{[\s\S]*\}", text)
-    if not m:
+    raw = _extract_json_from_response(text)
+    if not raw or not isinstance(raw, dict):
         return {}
-    try:
-        raw = json.loads(m.group())
-        result = {}
-        for k, v in raw.items():
-            nk = str(k).replace("Review ", "").replace("Index ", "").strip()
-            if nk.isdigit():
-                nk = str(int(nk))
-            result[nk] = normalize_theme_label(str(v).strip(), theme_labels)
-        return result
-    except json.JSONDecodeError:
-        return {}
+    result = {}
+    for k, v in raw.items():
+        nk = str(k).replace("Review ", "").replace("Index ", "").strip()
+        if nk.isdigit():
+            nk = str(int(nk))
+        result[nk] = normalize_theme_label(str(v).strip(), theme_labels)
+    return result
 
 
 def call_groq_classify_chunk(theme_labels, chunk_reviews):
@@ -195,16 +227,16 @@ Reviews:
             wait = 60 * (attempt + 1)
             time.sleep(wait)
     text = (response.choices[0].message.content or "").strip()
-    # Extract JSON (handle markdown code blocks)
-    m = re.search(r"\{[\s\S]*\}", text)
-    if not m:
+    raw = _extract_json_from_response(text)
+    if not raw or not isinstance(raw, dict):
         return {}
-    try:
-        raw = json.loads(m.group())
-        # Normalize values to exact theme labels
-        return {k: normalize_theme_label(v, theme_labels) for k, v in raw.items()}
-    except json.JSONDecodeError:
-        return {}
+    result = {}
+    for k, v in raw.items():
+        nk = str(k).replace("Review ", "").replace("Index ", "").strip()
+        if nk.isdigit():
+            nk = str(int(nk))
+        result[nk] = normalize_theme_label(str(v).strip(), theme_labels)
+    return result
 
 
 def build_themes_with_reviews(themes, reviews, review_id_to_theme):
@@ -337,6 +369,10 @@ def main():
             review_id_to_theme[str(k)] = v
         print(f"  Chunk {i+1}/{len(chunks)}: {len(result)} classified")
         time.sleep(2)
+    if not review_id_to_theme and reviews and theme_labels:
+        print("  Fallback: no classifications returned; assigning all reviews to first theme.")
+        for r in reviews:
+            review_id_to_theme[str(r.get("index", len(review_id_to_theme)))] = theme_labels[0]
     out_path = THEMES_DIR / f"themes_{date_str}.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({"themes": themes, "reviewIdToTheme": review_id_to_theme}, f, indent=2)
