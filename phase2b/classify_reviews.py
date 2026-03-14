@@ -117,12 +117,23 @@ For each review below, assign exactly one theme from the list. Reply with a JSON
 Reviews:
 {block}
 """
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,
-        max_tokens=1024,
-    )
+    for attempt in range(3):
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=1024,
+            )
+            break
+        except Exception as e:
+            err_str = str(e).lower()
+            if "429" not in err_str and "rate" not in err_str:
+                raise
+            if attempt == 2:
+                raise
+            wait = 60 * (attempt + 1)
+            time.sleep(wait)
     text = (response.choices[0].message.content or "").strip()
     # Extract JSON (handle markdown code blocks)
     m = re.search(r"\{[\s\S]*\}", text)

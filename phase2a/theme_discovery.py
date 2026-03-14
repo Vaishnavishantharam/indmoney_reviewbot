@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -159,12 +160,24 @@ Short description for label2
 Reviews:
 {combined}
 """
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-        max_tokens=400,
-    )
+    for attempt in range(3):
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                max_tokens=400,
+            )
+            break
+        except Exception as e:
+            err_str = str(e).lower()
+            if "429" not in err_str and "rate" not in err_str:
+                raise
+            if attempt == 2:
+                raise
+            wait = 60 * (attempt + 1)
+            print(f"  Groq rate limit (429). Waiting {wait}s before retry {attempt + 1}/2...")
+            time.sleep(wait)
     text = (response.choices[0].message.content or "").strip()
     themes = _parse_theme_lines_with_descriptions(text)
     if not themes:
@@ -188,12 +201,24 @@ For each final theme, give the theme label on one line, then a short one-line de
 
 {combined}
 """
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,
-        max_tokens=400,
-    )
+    for attempt in range(3):
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=400,
+            )
+            break
+        except Exception as e:
+            err_str = str(e).lower()
+            if "429" not in err_str and "rate" not in err_str:
+                raise
+            if attempt == 2:
+                raise
+            wait = 60 * (attempt + 1)
+            print(f"  Groq rate limit (429). Waiting {wait}s before retry {attempt + 1}/2...")
+            time.sleep(wait)
     text = (response.choices[0].message.content or "").strip()
     themes = _parse_theme_lines_with_descriptions(text)
     if not themes:
@@ -216,7 +241,6 @@ For each final theme, give the theme label on one line, then a short one-line de
 
 
 def main():
-    import time
     load_dotenv()
     THEMES_DIR.mkdir(parents=True, exist_ok=True)
     reviews_path = get_latest_reviews_path()
