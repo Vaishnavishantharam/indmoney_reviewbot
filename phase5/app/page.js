@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
 
 export default function Home() {
   const [weeksBack, setWeeksBack] = useState(10);
@@ -159,17 +160,29 @@ export default function Home() {
         <section style={{ marginBottom: 32 }}>
           <h2 style={{ fontSize: "1.25rem", marginBottom: 12 }}>Weekly One-Page Note</h2>
           <div
+            className="pulse-markdown"
             style={{
               padding: 16,
               background: "#18181b",
               borderRadius: 8,
               border: "1px solid #3f3f46",
-              whiteSpace: "pre-wrap",
               fontSize: 14,
               lineHeight: 1.6,
             }}
           >
-            {pulse}
+            <ReactMarkdown
+              components={{
+                h2: ({ node, ...p }) => <h2 style={{ fontSize: "1.1rem", marginTop: 12, marginBottom: 8, fontWeight: 600 }} {...p} />,
+                h3: ({ node, ...p }) => <h3 style={{ fontSize: "1rem", marginTop: 12, marginBottom: 6, fontWeight: 600 }} {...p} />,
+                p: ({ node, ...p }) => <p style={{ marginBottom: 10 }} {...p} />,
+                ul: ({ node, ...p }) => <ul style={{ marginBottom: 10, paddingLeft: 20 }} {...p} />,
+                ol: ({ node, ...p }) => <ol style={{ marginBottom: 10, paddingLeft: 20 }} {...p} />,
+                li: ({ node, ...p }) => <li style={{ marginBottom: 4 }} {...p} />,
+                strong: ({ node, ...p }) => <strong style={{ fontWeight: 600 }} {...p} />,
+              }}
+            >
+              {pulse}
+            </ReactMarkdown>
           </div>
           <p style={{ marginTop: 8, fontSize: 13, color: "#a1a1aa" }}>
             Also saved to <code>output/weekly-pulse_*.md</code> and <code>*.txt</code>

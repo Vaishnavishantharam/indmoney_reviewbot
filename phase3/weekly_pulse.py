@@ -180,21 +180,21 @@ def main():
 **Sample anonymized quotes (use or paraphrase ONLY from this list; do not invent quotes):**
 {quotes_block}
 
-**REQUIRED OUTPUT FORMAT — produce all parts. Use ONLY the data above.**
+**REQUIRED OUTPUT FORMAT — use clear markdown structure. Use ONLY the data above.**
 
 ## Weekly One-Page Note
 
 ### Top 3 Themes
-List up to 3 themes. For each: theme name, review count in parentheses, then 1–2 sentences on what users are saying. Use only the theme names and counts provided; do not add themes with 0 reviews.
+List up to 3 themes. For each theme: use a **bold** theme name and review count in parentheses, then a short paragraph (1–2 sentences) on what users are saying. Put a blank line between each theme. Use only the theme names and counts provided; do not add themes with 0 reviews.
 
 ### 3 User Quotes
-Write exactly 3 user quotes. Use or lightly paraphrase ONLY from the sample quotes above. One line per quote. Anonymous.
+Write exactly 3 user quotes. Use or lightly paraphrase ONLY from the sample quotes above. Format as a short paragraph or bullet list. Keep anonymous.
 
 ### 3 Action Ideas
-Write exactly 3 action ideas. Each must be a concrete, actionable next step for product or support.
+Write exactly 3 action ideas as a numbered or bullet list. Each must be a concrete, actionable next step for product or support. Use **bold** for the action title if desired. Put a blank line between items.
 
 ---
-RULES: Output ONLY the markdown above (starting with "## Weekly One-Page Note"). Do not invent themes, quotes, or stats. If sample quotes are empty, write "No user quotes available this week" for that section. Aim for 300–{MAX_WORDS} words. Professional tone. No extra intro or sign-off."""
+RULES: Output ONLY the markdown above (starting with "## Weekly One-Page Note"). Use proper markdown: ## and ### for headers, blank lines between paragraphs, **bold** for emphasis. Do not invent themes, quotes, or stats. If sample quotes are empty, write "No user quotes available this week" for that section. Aim for 300–{MAX_WORDS} words. Professional tone. No extra intro or sign-off."""
 
     print("Phase 3 — One-page weekly pulse (Gemini)")
     print(f"  Input: {grouped_path}")
