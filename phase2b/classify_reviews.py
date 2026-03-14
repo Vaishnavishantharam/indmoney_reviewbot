@@ -18,8 +18,8 @@ sys.path.insert(0, str(_REPO_ROOT))
 
 REVIEWS_DIR = _REPO_ROOT / "reviews"
 THEMES_DIR = _REPO_ROOT / "themes"
-# Reviews per batch; configurable via CLASSIFY_CHUNK_SIZE (default 100 = fewer Groq calls)
-CHUNK_SIZE = int(os.environ.get("CLASSIFY_CHUNK_SIZE", "100"))
+# Reviews per batch; default 250 = 1 Groq call for ~250 reviews (avoids 429)
+CHUNK_SIZE = int(os.environ.get("CLASSIFY_CHUNK_SIZE", "250"))
 
 
 def load_dotenv():

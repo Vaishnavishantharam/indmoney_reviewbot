@@ -12,6 +12,7 @@ Set PORT in env (e.g. 8000). CORS is enabled for your Vercel frontend origin.
 """
 import os
 import subprocess
+import time
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -76,6 +77,8 @@ def api_weekly_pulse():
         data = request.get_json(force=True, silent=True) or {}
         weeks_back = data.get("weeksBack", 10)
         env["WEEKS_BACK"] = str(weeks_back)
+        if "MAX_REVIEWS" not in env or not str(env.get("MAX_REVIEWS", "")).strip():
+            env["MAX_REVIEWS"] = "250"
         py = get_python()
 
         run_cmd(py, ["phase1/fetch_reviews.py"], env=env)
@@ -83,6 +86,7 @@ def api_weekly_pulse():
         used_fallback = False
         try:
             run_cmd(py, ["phase2a/theme_discovery.py"], env=env)
+            time.sleep(10)
             run_cmd(py, ["phase2b/classify_reviews.py"], env=env)
             run_cmd(py, ["phase3/weekly_pulse.py"], env=env)
         except RuntimeError as e:
