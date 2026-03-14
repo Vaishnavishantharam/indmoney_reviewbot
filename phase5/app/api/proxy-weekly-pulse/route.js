@@ -16,7 +16,21 @@ export async function POST(request) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const data = await res.json().catch(() => ({ error: "Invalid response from backend" }));
+    const raw = await res.text();
+    let data;
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      const snippet = raw.slice(0, 200).replace(/\s+/g, " ");
+      return Response.json(
+        {
+          error: "Backend returned non-JSON. Pipeline may have timed out or crashed.",
+          status: res.status,
+          hint: snippet || "(empty body)",
+        },
+        { status: res.status >= 400 ? res.status : 502 }
+      );
+    }
     return Response.json(data, { status: res.status });
   } catch (e) {
     return Response.json(
