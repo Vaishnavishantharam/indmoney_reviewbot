@@ -33,6 +33,32 @@ function formatDateDisplay(isoDate) {
   return new Date(isoDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 }
 
+const GEMINI_DELAY_BETWEEN_CALLS_MS = 600;
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+const GEMINI_MODEL_IDS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+
+/** Call Gemini with prompt; returns trimmed text. Tries model list in order. */
+async function geminiGenerate(geminiKey, prompt, maxTokens = 1024) {
+  const { GoogleGenerativeAI } = await import("@google/generative-ai");
+  const genAI = new GoogleGenerativeAI(geminiKey);
+  let lastErr;
+  for (const modelName of GEMINI_MODEL_IDS) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(prompt);
+      const text = (result.response?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+      if (text) return text;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("Gemini returned no text");
+}
+
 /** Phase 1: Fetch reviews using google-play-scraper */
 async function fetchReviews({ appId = APP_ID, weeksBack = 10, maxReviews = 1000 } = {}) {
   const gplay = (await import("google-play-scraper")).default;
@@ -81,12 +107,8 @@ async function fetchReviews({ appId = APP_ID, weeksBack = 10, maxReviews = 1000 
   return reviews;
 }
 
-/** Phase 2a: Theme discovery via Groq (2 batches, merge) */
-async function themeDiscovery(reviewTexts, groqKey) {
-  const Groq = (await import("groq-sdk")).default;
-  const client = new Groq({ apiKey: groqKey });
-  const model = "llama-3.3-70b-versatile";
-
+/** Phase 2a: Theme discovery via Gemini (2 batches, merge) */
+async function themeDiscovery(reviewTexts, geminiKey) {
   function parseThemes(text) {
     const themes = [];
     const lines = text.split("\n").map((l) => l.replace(/^[\d.)\-\*]+\s*/, "").trim()).filter(Boolean);
@@ -116,35 +138,22 @@ For each theme, give the theme label on one line, then a short one-line descript
 
 Reviews:
 ${combined}`;
-    const res = await client.chat.completions.create({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.3,
-      max_tokens: 400,
-    });
-    const content = (res.choices?.[0]?.message?.content || "").trim();
+    if (b > 0) await sleep(GEMINI_DELAY_BETWEEN_CALLS_MS);
+    const content = await geminiGenerate(geminiKey, prompt, 400);
     batches.push(parseThemes(content).length ? parseThemes(content) : DEFAULT_THEMES.slice(0, MAX_THEMES));
   }
 
   if (batches.length === 1) return batches[0];
+  await sleep(GEMINI_DELAY_BETWEEN_CALLS_MS);
   const combined = batches.map((list, i) => `Batch ${i + 1}:\n${list.map((t) => `  ${t.label}: ${t.description}`).join("\n")}`).join("\n\n");
-  const mergeRes = await client.chat.completions.create({
-    model,
-    messages: [{
-      role: "user",
-      content: `These theme lists were generated from different batches of the same app's reviews. Merge them into a single list of 3 to 5 distinct themes. For each final theme, give the theme label on one line, then a short one-line description on the next line. No numbering.\n\n${combined}`,
-    }],
-    temperature: 0.2,
-    max_tokens: 400,
-  });
-  const merged = parseThemes((mergeRes.choices?.[0]?.message?.content || "").trim());
+  const mergePrompt = `These theme lists were generated from different batches of the same app's reviews. Merge them into a single list of 3 to 5 distinct themes. For each final theme, give the theme label on one line, then a short one-line description on the next line. No numbering.\n\n${combined}`;
+  const mergeContent = await geminiGenerate(geminiKey, mergePrompt, 400);
+  const merged = parseThemes(mergeContent);
   return merged.length ? merged : batches[0];
 }
 
-/** Phase 2b: Classify reviews by theme via Groq */
-async function classifyReviews(reviews, themes, groqKey) {
-  const Groq = (await import("groq-sdk")).default;
-  const client = new Groq({ apiKey: groqKey });
+/** Phase 2b: Classify reviews by theme via Gemini */
+async function classifyReviews(reviews, themes, geminiKey) {
   const themeLabels = themes.map((t) => (typeof t === "object" ? t.label : t));
 
   function normalizeLabel(returned) {
@@ -168,13 +177,8 @@ For each review below, assign exactly one theme from the list. Reply with a JSON
 
 Reviews:
 ${lines}`;
-    const res = await client.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.2,
-      max_tokens: 1024,
-    });
-    const text = (res.choices?.[0]?.message?.content || "").trim();
+    if (i > 0) await sleep(GEMINI_DELAY_BETWEEN_CALLS_MS);
+    const text = await geminiGenerate(geminiKey, prompt, 1024);
     const match = text.match(/\{[\s\S]*\}/);
     if (match) {
       try {
@@ -343,17 +347,15 @@ export async function runNodePipeline(env) {
   const appId = env.APP_ID || APP_ID;
   const weeksBack = Math.max(8, Math.min(12, parseInt(env.WEEKS_BACK || "10", 10) || 10));
   const maxReviews = parseInt(env.MAX_REVIEWS || "1000", 10) || 1000;
-  const groqKey = (env.GROQ_API_KEY || "").trim();
   const geminiKey = (env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "").trim();
-  if (!groqKey) throw new Error("GROQ_API_KEY is not set. Add it in Vercel Environment Variables.");
   if (!geminiKey) throw new Error("GEMINI_API_KEY is not set. Add it in Vercel Environment Variables.");
 
   const reviews = await fetchReviews({ appId, weeksBack, maxReviews });
   if (reviews.length === 0) throw new Error("No reviews fetched. Try different weeks or check the app ID.");
 
   const texts = reviews.map((r) => r.text).filter(Boolean);
-  const themes = await themeDiscovery(texts, groqKey);
-  const reviewIdToTheme = await classifyReviews(reviews, themes, groqKey);
+  const themes = await themeDiscovery(texts, geminiKey);
+  const reviewIdToTheme = await classifyReviews(reviews, themes, geminiKey);
   const themesWithReviews = buildThemesWithReviews(themes, reviews, reviewIdToTheme);
   const { pulse, themeLegend } = await generateOnePager(themesWithReviews, geminiKey);
   return { pulse, themeLegend };
