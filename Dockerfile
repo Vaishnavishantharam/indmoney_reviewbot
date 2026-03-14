@@ -25,9 +25,10 @@ COPY scripts/   scripts/
 # Writable dirs for pipeline output (reviews, themes, output)
 RUN mkdir -p reviews themes output
 
-# Railway and most hosts set PORT at runtime
+# Railway sets PORT at runtime; app must listen on 0.0.0.0:PORT
 ENV PORT=8000
 EXPOSE 8000
 
-# Run with gunicorn for production (single worker to avoid duplicate pipeline runs)
-CMD ["sh", "-c", "exec gunicorn -w 1 -b 0.0.0.0:${PORT:-8000} api_server:app"]
+# Start script reads PORT from env and binds gunicorn (Railway-compatible)
+RUN chmod +x scripts/start-api.sh
+CMD ["./scripts/start-api.sh"]
