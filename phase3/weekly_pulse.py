@@ -71,7 +71,7 @@ def load_grouped_data(path):
 
 def build_prompt_input(themes_with_reviews):
     """Build theme summary and quote list for the LLM."""
-    # Sort by review count descending, take top 3
+    # Only themes with at least 1 review; sort by count descending, take top 3
     entries = [
         {
             "label": e["theme"].get("label", ""),
@@ -79,6 +79,7 @@ def build_prompt_input(themes_with_reviews):
             "count": len(e.get("reviews", [])),
         }
         for e in themes_with_reviews
+        if len(e.get("reviews", [])) > 0
     ]
     entries.sort(key=lambda x: -x["count"])
     top = entries[:TOP_THEMES]
@@ -97,7 +98,9 @@ def build_prompt_input(themes_with_reviews):
                 quotes.append(f"[{label}] \"{text[:200]}{'...' if len(text) > 200 else ''}\"")
     quotes = quotes[:20]
 
-    return "\n\n".join(theme_lines), "\n".join(quotes)
+    theme_summary_out = "\n\n".join(theme_lines) if theme_lines else "(No themes with reviews in this run. Do not invent themes or counts.)"
+    quotes_out = "\n".join(quotes) if quotes else "(No sample quotes available.)"
+    return theme_summary_out, quotes_out
 
 
 def call_gemini(prompt: str) -> str:
@@ -169,29 +172,29 @@ def main():
 
     theme_summary, quotes_block = build_prompt_input(themes_with_reviews)
 
-    prompt = f"""Generate a weekly one-page note for product leadership from the app store review data below. Use ONLY this data. No PII.
+    prompt = f"""Generate a weekly one-page note for product leadership from the app store review data below.
 
-**Theme summary (top 3 by volume):**
+**Theme summary (top themes by review count):**
 {theme_summary}
 
-**Sample anonymized quotes (choose from these only; do not invent):**
+**Sample anonymized quotes (use or paraphrase ONLY from this list; do not invent quotes):**
 {quotes_block}
 
-**REQUIRED OUTPUT FORMAT — you must produce all four parts in full:**
+**REQUIRED OUTPUT FORMAT — produce all parts. Use ONLY the data above.**
 
 ## Weekly One-Page Note
 
 ### Top 3 Themes
-Write exactly 3 themes. For each: theme name, review count in parentheses, then 1–2 sentences on what users are saying and why it matters.
+List up to 3 themes. For each: theme name, review count in parentheses, then 1–2 sentences on what users are saying. Use only the theme names and counts provided; do not add themes with 0 reviews.
 
 ### 3 User Quotes
-Write exactly 3 user quotes. Use or lightly paraphrase from the sample quotes above. One line per quote. Keep anonymous.
+Write exactly 3 user quotes. Use or lightly paraphrase ONLY from the sample quotes above. One line per quote. Anonymous.
 
 ### 3 Action Ideas
-Write exactly 3 action ideas. Each must be a concrete, actionable next step for product or support. Be specific.
+Write exactly 3 action ideas. Each must be a concrete, actionable next step for product or support.
 
 ---
-RULES: Output ONLY the markdown above (starting with "## Weekly One-Page Note"). Do not stop until you have written all 3 themes, all 3 quotes, and all 3 action ideas. Detailed one-pager: aim for 300–{MAX_WORDS} words. Professional tone. No extra intro or sign-off."""
+RULES: Output ONLY the markdown above (starting with "## Weekly One-Page Note"). Do not invent themes, quotes, or stats. If sample quotes are empty, write "No user quotes available this week" for that section. Aim for 300–{MAX_WORDS} words. Professional tone. No extra intro or sign-off."""
 
     print("Phase 3 — One-page weekly pulse (Gemini)")
     print(f"  Input: {grouped_path}")

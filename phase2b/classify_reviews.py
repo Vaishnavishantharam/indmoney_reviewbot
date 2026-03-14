@@ -127,7 +127,9 @@ def call_gemini_classify_chunk(theme_labels, chunk_reviews):
     block = "\n".join(lines)
     prompt = f"""Themes (use exactly one per review; return the exact theme label as given): {themes_str}
 
-For each review below, assign exactly one theme from the list. Reply with a JSON object mapping index to theme label, e.g. {{"0": "UX/Usability", "1": "Performance"}}. Use string keys. Return only the JSON object, no other text.
+For each review below, assign exactly one theme from the list. Reply with a JSON object only. Keys must be the index number as string: "0", "1", "2", etc. Values must be the exact theme label from the list above.
+Example: {{"0": "UX/Usability", "1": "Performance", "2": "Bugs/Issues"}}
+Return only the JSON object, no other text or markdown.
 
 Reviews:
 {block}
@@ -138,7 +140,13 @@ Reviews:
         return {}
     try:
         raw = json.loads(m.group())
-        return {k: normalize_theme_label(v, theme_labels) for k, v in raw.items()}
+        result = {}
+        for k, v in raw.items():
+            nk = str(k).replace("Review ", "").replace("Index ", "").strip()
+            if nk.isdigit():
+                nk = str(int(nk))
+            result[nk] = normalize_theme_label(str(v).strip(), theme_labels)
+        return result
     except json.JSONDecodeError:
         return {}
 
