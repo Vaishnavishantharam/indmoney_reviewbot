@@ -18,8 +18,8 @@ export default function Home() {
     setError(null);
     setPulse(null);
     setThemeLegend(null);
-    const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || "https://indmoneyreviewbot-production.up.railway.app").trim().replace(/\/$/, "");
-    const apiUrl = `${backendUrl}/api/weekly-pulse`;
+    // Use same-origin proxy to avoid CORS; proxy calls Railway backend
+    const apiUrl = "/api/proxy-weekly-pulse";
     try {
       const res = await fetch(apiUrl, {
         method: "POST",
@@ -34,7 +34,7 @@ export default function Home() {
       let msg = e.message || "Failed to generate pulse";
       if (msg === "Failed to fetch" || e.name === "TypeError") {
         msg =
-          "Cannot reach the backend. Check: (1) NEXT_PUBLIC_BACKEND_URL is set on Vercel to https://indmoneyreviewbot-production.up.railway.app and redeploy. (2) If you set CORS_ORIGINS on Railway, use exactly https://indmoney-reviewbot.vercel.app (no trailing slash). Or remove CORS_ORIGINS to allow all origins.";
+          "Cannot reach the backend. The request goes through Vercel to Railway; check that the Railway backend is up (open https://indmoneyreviewbot-production.up.railway.app/health in a new tab).";
       } else if (msg === "Exit null" || msg.includes("Exit null")) {
         msg =
           "Generate one-pager is not available here. Use « Run weekly pulse in cloud » to trigger the pipeline; you'll receive the email when it finishes.";
