@@ -35,7 +35,7 @@ export default function Home() {
       let msg = e.message || "Failed to generate pulse";
       if (msg === "Failed to fetch" || e.name === "TypeError") {
         msg =
-          "Cannot reach the API. Check your connection and that GEMINI_API_KEY is set in Vercel Environment Variables.";
+          "Cannot reach the API. Check your connection and that GROQ_API_KEY is set in Vercel Environment Variables.";
       } else if (msg === "Exit null" || msg.includes("Exit null")) {
         msg =
           "Generate one-pager is not available here. Use « Run weekly pulse in cloud » to trigger the pipeline; you'll receive the email when it finishes.";
