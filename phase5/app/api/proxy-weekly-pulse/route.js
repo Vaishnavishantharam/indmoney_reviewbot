@@ -22,12 +22,12 @@ export async function POST(request) {
       data = raw ? JSON.parse(raw) : {};
     } catch {
       const snippet = raw.slice(0, 200).replace(/\s+/g, " ");
+      const isTimeout = res.status === 504 || res.status === 502 || /timeout|gateway|502|504/i.test(snippet);
+      const errorMsg = isTimeout
+        ? "Backend timed out. The pipeline takes 1–2 minutes; Railway may have cut the request. Try again in a few minutes or reduce 'Weeks back' to 8."
+        : "Backend returned non-JSON. Pipeline may have crashed. Check Railway logs for the service.";
       return Response.json(
-        {
-          error: "Backend returned non-JSON. Pipeline may have timed out or crashed.",
-          status: res.status,
-          hint: snippet || "(empty body)",
-        },
+        { error: errorMsg, status: res.status, hint: snippet || "(empty body)" },
         { status: res.status >= 400 ? res.status : 502 }
       );
     }

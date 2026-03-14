@@ -32,7 +32,15 @@ def run_phase3_only(env):
     run_cmd(get_python(), ["phase3/weekly_pulse.py"], env=env)
 
 app = Flask(__name__)
-CORS(app, origins=os.environ.get("CORS_ORIGINS", "*").split(","))
+_cors_origins = os.environ.get("CORS_ORIGINS", "*").strip()
+CORS(app, origins=[o.strip() for o in _cors_origins.split(",") if o.strip()] or ["*"])
+
+
+@app.errorhandler(Exception)
+def handle_error(e):
+    """Ensure every error returns JSON so the proxy never gets HTML."""
+    msg = getattr(e, "message", str(e)) if e else "Unknown error"
+    return jsonify(error=_nice_error(msg)), 500
 
 
 def _nice_error(msg):
