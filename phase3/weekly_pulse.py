@@ -180,21 +180,28 @@ def main():
 **Sample anonymized quotes (use or paraphrase ONLY from this list; do not invent quotes):**
 {quotes_block}
 
-**REQUIRED OUTPUT FORMAT — use clear markdown structure. Use ONLY the data above.**
+**REQUIRED OUTPUT — follow this markdown template exactly (keep # characters; do not output plain text headings).**
 
 ## Weekly One-Page Note
 
 ### Top 3 Themes
-List up to 3 themes. For each theme: use a **bold** theme name and review count in parentheses, then a short paragraph (1–2 sentences) on what users are saying. Put a blank line between each theme. Use only the theme names and counts provided; do not add themes with 0 reviews.
+1. **Theme label (N reviews):** One or two sentences on what users are saying. Use real labels and counts from the theme summary only.
+2. **Theme label (N reviews):** One or two sentences.
+3. **Theme label (N reviews):** One or two sentences.
 
 ### 3 User Quotes
-Write exactly 3 user quotes. Use or lightly paraphrase ONLY from the sample quotes above. Format as a short paragraph or bullet list. Keep anonymous.
+Exactly three lines. Each line MUST be: asterisk, space, double-quoted quote (no merging into one paragraph).
+* "First quote."
+* "Second quote."
+* "Third quote."
 
 ### 3 Action Ideas
-Write exactly 3 action ideas as a numbered or bullet list. Each must be a concrete, actionable next step for product or support. Use **bold** for the action title if desired. Put a blank line between items.
+1. **Short action title:** One or two sentences (concrete next step).
+2. **Short action title:** One or two sentences.
+3. **Short action title:** One or two sentences.
 
 ---
-RULES: Output ONLY the markdown above (starting with "## Weekly One-Page Note"). Use proper markdown: ## and ### for headers, blank lines between paragraphs, **bold** for emphasis. Do not invent themes, quotes, or stats. If sample quotes are empty, write "No user quotes available this week" for that section. Aim for 300–{MAX_WORDS} words. Professional tone. No extra intro or sign-off."""
+RULES: Output ONLY from "## Weekly One-Page Note" through action item 3. Keep ### headers and numbered lists exactly as in the template. Do not invent themes or counts. If sample quotes are empty, output three lines: * "(No user quotes available this week.)" on each line. Aim for 300–{MAX_WORDS} words. Professional tone. No sign-off."""
 
     print("Phase 3 — One-page weekly pulse (Gemini)")
     print(f"  Input: {grouped_path}")

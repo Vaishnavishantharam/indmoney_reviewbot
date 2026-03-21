@@ -65,8 +65,8 @@ export async function POST(request) {
   if (isVercelOrNoPipeline()) {
     try {
       const { runNodePipeline } = await import("../../../lib/pipeline.js");
-      const { pulse, themeLegend } = await runNodePipeline(env);
-      return Response.json({ pulse, themeLegend });
+      const { pulse, themeLegend, pulseBundle, feeBlockMarkdown, feeBlockPlain } = await runNodePipeline(env);
+      return Response.json({ pulse, themeLegend, pulseBundle, feeBlockMarkdown, feeBlockPlain });
     } catch (err) {
       return Response.json(
         { error: err.message || "Pipeline failed" },
@@ -95,7 +95,21 @@ export async function POST(request) {
     const legendPath = path.join(outputDir, "theme-legend.md");
     const themeLegend = fs.existsSync(legendPath) ? fs.readFileSync(legendPath, "utf-8") : "";
 
-    return Response.json({ pulse, themeLegend });
+    run("python3", ["phase4/pulse_bundle.py", pulsePath]);
+    const dateMatch = latest.match(/weekly-pulse_(\d{4}-\d{2}-\d{2})/);
+    const dateStr = dateMatch ? dateMatch[1] : "";
+    const bundlePath = path.join(outputDir, `pulse_bundle_${dateStr}.json`);
+    let pulseBundle = null;
+    let feeBlockMarkdown = "";
+    let feeBlockPlain = "";
+    if (dateStr && fs.existsSync(bundlePath)) {
+      const { feeBlockMarkdown: fm, feeBlockPlain: fp } = await import("../../../lib/pulseBundle.js");
+      pulseBundle = JSON.parse(fs.readFileSync(bundlePath, "utf-8"));
+      feeBlockMarkdown = fm(pulseBundle);
+      feeBlockPlain = fp(pulseBundle);
+    }
+
+    return Response.json({ pulse, themeLegend, pulseBundle, feeBlockMarkdown, feeBlockPlain });
   } catch (err) {
     let msg = err.message || "Pipeline failed";
     if (msg === "Exit null" || msg.includes("Exit null")) {

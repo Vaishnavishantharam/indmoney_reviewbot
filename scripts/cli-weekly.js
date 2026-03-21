@@ -45,3 +45,4 @@ console.log("\nPhase 3: Generating weekly one-pager...");
 run("bash", ["scripts/setup-venv-and-run-phase3.sh"]);
 
 console.log("\nDone. Output: output/weekly-pulse_*.md, output/weekly-pulse_*.txt, output/theme-legend.md");
+console.log("Tip: run `python3 phase4/pulse_bundle.py` for JSON only, or `npm run email` (writes pulse_bundle + .eml).");

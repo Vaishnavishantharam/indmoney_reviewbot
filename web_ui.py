@@ -5,8 +5,12 @@ Run from repo root: python3 web_ui.py
 Then open http://127.0.0.1:5001 (no npm required).
 Uses port 5001 to avoid conflict with macOS AirPlay on 5000.
 """
+import json
 import os
+import re
 import subprocess
+import traceback
+from pathlib import Path
 
 import markdown
 from flask import Flask, request, jsonify, render_template
@@ -103,6 +107,70 @@ def read_latest_pulse_and_legend():
     return pulse, theme_legend
 
 
+def get_latest_pulse_md_path():
+    """Absolute path to newest output/weekly-pulse_YYYY-MM-DD.md, or None."""
+    output_dir = os.path.join(REPO_ROOT, "output")
+    if not os.path.isdir(output_dir):
+        return None
+    md_files = [
+        f for f in os.listdir(output_dir)
+        if f.startswith("weekly-pulse_") and f.endswith(".md")
+    ]
+    if not md_files:
+        return None
+    latest = sorted(md_files)[-1]
+    return os.path.join(output_dir, latest)
+
+
+def enrich_with_pulse_bundle(pulse_path, env):
+    """
+    Build pulse_bundle + fee blocks in-process (reliable in Docker; no subprocess).
+    Merges ``env`` into os.environ for EXIT_LOAD_* for the duration of the call.
+    On failure logs traceback and returns {}.
+    """
+    if not pulse_path or not os.path.isfile(pulse_path):
+        return {}
+    restore = {}
+    try:
+        for k, v in (env or {}).items():
+            if v is None:
+                continue
+            vs = str(v).strip()
+            if not vs:
+                continue
+            restore[k] = os.environ.get(k, "__unset__")
+            os.environ[k] = vs
+
+        from phase4.pulse_bundle import (
+            build_pulse_bundle,
+            fee_block_markdown,
+            fee_block_plain,
+            save_pulse_bundle,
+        )
+
+        pp = Path(pulse_path)
+        m = re.search(r"weekly-pulse_(\d{4}-\d{2}-\d{2})", pp.name)
+        date_str = m.group(1) if m else ""
+        if not date_str:
+            return {}
+        bundle = build_pulse_bundle(pp, date_str)
+        save_pulse_bundle(bundle, date_str, pulse_md_path=pp)
+        return {
+            "pulseBundle": bundle,
+            "feeBlockMarkdown": fee_block_markdown(bundle),
+            "feeBlockPlain": fee_block_plain(bundle),
+        }
+    except Exception:
+        traceback.print_exc()
+        return {}
+    finally:
+        for k, old in restore.items():
+            if old == "__unset__":
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = old
+
+
 @app.route("/")
 def index():
     return render_template("weekly_ui.html")
@@ -153,32 +221,55 @@ def api_weekly_pulse():
         pulse, theme_legend = read_latest_pulse_and_legend()
         if not pulse:
             return jsonify(error="No weekly pulse generated"), 500
-        pulse_html = markdown.markdown(pulse, extensions=["nl2br"])
-        return jsonify(pulse=pulse, pulseHtml=pulse_html, themeLegend=theme_legend or "", fromFallback=used_fallback)
+        bundle_extra = enrich_with_pulse_bundle(get_latest_pulse_md_path(), env)
+        fee_md = bundle_extra.get("feeBlockMarkdown") or ""
+        pulse_html = markdown.markdown(
+            pulse + ("\n\n" + fee_md if fee_md else ""),
+            extensions=["nl2br"],
+        )
+        return jsonify(
+            pulse=pulse,
+            pulseHtml=pulse_html,
+            themeLegend=theme_legend or "",
+            fromFallback=used_fallback,
+            **bundle_extra,
+        )
     except RuntimeError as e:
         err_msg = _nice_error(str(e))
         pulse, theme_legend = read_latest_pulse_and_legend()
         if pulse:
-            pulse_html = markdown.markdown(pulse, extensions=["nl2br"])
+            bundle_extra = enrich_with_pulse_bundle(get_latest_pulse_md_path(), env)
+            fee_md = bundle_extra.get("feeBlockMarkdown") or ""
+            pulse_html = markdown.markdown(
+                pulse + ("\n\n" + fee_md if fee_md else ""),
+                extensions=["nl2br"],
+            )
             return jsonify(
                 pulse=pulse,
                 pulseHtml=pulse_html,
                 themeLegend=theme_legend or "",
                 fromFallback=True,
                 error=f"Regeneration failed: {err_msg}. Showing last saved one-pager below.",
+                **bundle_extra,
             )  # 200 so the link works and content is shown
         return jsonify(error=err_msg), 500
     except Exception as e:
         err_msg = _nice_error(str(e))
         pulse, theme_legend = read_latest_pulse_and_legend()
         if pulse:
-            pulse_html = markdown.markdown(pulse, extensions=["nl2br"])
+            bundle_extra = enrich_with_pulse_bundle(get_latest_pulse_md_path(), env)
+            fee_md = bundle_extra.get("feeBlockMarkdown") or ""
+            pulse_html = markdown.markdown(
+                pulse + ("\n\n" + fee_md if fee_md else ""),
+                extensions=["nl2br"],
+            )
             return jsonify(
                 pulse=pulse,
                 pulseHtml=pulse_html,
                 themeLegend=theme_legend or "",
                 fromFallback=True,
                 error=f"Regeneration failed: {err_msg}. Showing last saved one-pager below.",
+                **bundle_extra,
             )  # 200 so the link works and content is shown
         return jsonify(error=err_msg), 500
 

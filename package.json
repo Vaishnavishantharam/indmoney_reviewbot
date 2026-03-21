@@ -9,6 +9,7 @@
     "fetch-reviews:playwright": "FETCH_METHOD=playwright node scripts/cli-fetch-reviews.js",
     "phase2a": "python3 phase2a/theme_discovery.py",
     "phase2b": "python3 phase2b/classify_reviews.py",
+    "fetch-exit-load": "node scripts/fetch-exit-load-playwright.mjs",
     "postinstall": "npx playwright install chromium 2>/dev/null || true",
     "weekly": "node scripts/cli-weekly.js",
     "email": "node scripts/cli-email.js",

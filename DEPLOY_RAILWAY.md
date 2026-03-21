@@ -16,8 +16,12 @@ The backend API (Flask) runs the full pipeline (Phase 1 → 2a → 2b → 3) and
    | `GROQ_API_KEY` | Yes | Groq API key for theme discovery and classification |
    | `GEMINI_API_KEY` | Yes | Gemini API key for the one-pager (Phase 3) |
    | `CORS_ORIGINS` | Optional | Comma-separated origins, e.g. `https://your-app.vercel.app` (default `*`) |
+   | `EXIT_LOAD_SOURCE_URL` | Optional | Public IND Money fund URL(s) for exit-load bullets in `pulseBundle` + email (Phase 4) |
+   | `EXIT_LOAD_BULLETS_JSON` | Optional | JSON array of 3 strings if the fund site blocks server-side HTTP (recommended on Railway unless you add Node+Playwright to the image) |
 
    `PORT` is set by Railway automatically; the Dockerfile uses it.
+
+   The API response from `POST /api/weekly-pulse` includes **`pulseBundle`**, **`feeBlockMarkdown`**, and **`feeBlockPlain`** after a successful run (requires `phase4` in the deployed image — use the repo Dockerfile as updated).
 
 5. **Deploy:** Railway will build the image and run:
    ```text

@@ -20,6 +20,7 @@ COPY phase1/    phase1/
 COPY phase2a/   phase2a/
 COPY phase2b/   phase2b/
 COPY phase3/    phase3/
+COPY phase4/    phase4/
 COPY scripts/   scripts/
 
 # Writable dirs for pipeline output (reviews, themes, output)

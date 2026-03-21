@@ -1,0 +1,30 @@
+{
+  "date": "2026-03-12",
+  "weekly_pulse": {
+    "themes": [
+      "Features (121 reviews):",
+      "Bugs/Issues (89 reviews):",
+      "UX/Usability (80 reviews):"
+    ],
+    "quotes": [
+      "just go with grow or anything else , i bought something and it got rejected but there is not any feature that tells me that where my money is gone , what i bought and at which step it got stuck.",
+      "rollback to the old UI",
+      "Worst app, very slow and not responsive sometimes, need to refresh every time"
+    ],
+    "action_ideas": [
+      "Prioritize Feature Roadmap for Q3:",
+      "Establish Rapid Bug Resolution Protocol:",
+      "Initiate UI/UX User Research & Iteration:"
+    ]
+  },
+  "fee_scenario": "Mutual Fund Exit Load",
+  "explanation_bullets": [
+    "Exit load is a fee some mutual funds charge when you redeem units before a stated holding period, when the scheme's terms include one.",
+    "The rate and holding period differ by fund; check the scheme page or factsheet on IND Money (or your statement) for the numbers that apply to you.",
+    "Use the source link(s) below for this example fund's published details; always verify against the latest scheme document before acting."
+  ],
+  "source_links": [
+    "https://www.indmoney.com/mutual-funds/hdfc-mid-cap-fund-direct-plan-growth-option-3097"
+  ],
+  "last_checked": "2026-03-12"
+}

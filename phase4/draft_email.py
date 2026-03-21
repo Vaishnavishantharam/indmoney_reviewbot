@@ -7,6 +7,7 @@ Dry-run (default): writes output/weekly-pulse_YYYY-MM-DD.eml. No SMTP.
 Send mode (--send): sends via smtplib with TLS when credentials are present.
 Config from .env: EMAIL_SENDER, EMAIL_PASSWORD, SMTP_HOST, SMTP_PORT, EMAIL_RECIPIENT.
 Run from repo root: python3 phase4/draft_email.py [pulse.md] [--recipient ADDR] [--recipient-name NAME] [--send]
+Also writes output/pulse_bundle_YYYY-MM-DD.json and appends the Mutual Fund Exit Load section to the email body.
 """
 
 import argparse
@@ -22,8 +23,16 @@ from typing import Optional
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
+from phase4.pulse_bundle import (  # noqa: E402
+    build_pulse_bundle,
+    fee_block_markdown,
+    fee_block_plain,
+    save_pulse_bundle,
+)
+
 OUTPUT_DIR = _REPO_ROOT / "output"
 SUBJECT_PREFIX = "GROWW Weekly Review Pulse -- "
+# Part B email subject: "Weekly Pulse + Fee Explainer — {week}". Set EMAIL_LEGACY_SUBJECT=1 for old subject line.
 
 
 def load_dotenv():
@@ -98,8 +107,13 @@ def get_config():
     }
 
 
-def build_body_content(pulse_path: Path, recipient_name: Optional[str]) -> tuple:
-    """Read pulse .md and optional .txt; return (plain_text, markdown_content). Always prepend personalised greeting: 'Hi {name},' then rest of weekly pulse."""
+def build_body_content(
+    pulse_path: Path,
+    recipient_name: Optional[str],
+    *,
+    part_b_section_headers: bool = True,
+) -> tuple:
+    """Read pulse .md and optional .txt; return (plain_text, markdown_content). Part B: optional Weekly pulse / section labels after greeting."""
     md_path = pulse_path if pulse_path.suffix.lower() == ".md" else pulse_path.with_suffix(".md")
     if not md_path.exists():
         raise FileNotFoundError(f"Pulse file not found: {md_path}")
@@ -109,6 +123,10 @@ def build_body_content(pulse_path: Path, recipient_name: Optional[str]) -> tuple
         content_plain = txt_path.read_text(encoding="utf-8")
     else:
         content_plain = content_md
+
+    if part_b_section_headers:
+        content_plain = "WEEKLY PULSE\n\n" + content_plain
+        content_md = "## Weekly pulse\n\n" + content_md
 
     # Personalised greeting: "Hi {recipient name}," then rest of email. If no name, use "Hi,".
     name = (recipient_name or "").strip()
@@ -208,10 +226,17 @@ def main():
         except ValueError:
             week_label = f"Week of {date_str}"
 
-    subject = SUBJECT_PREFIX + week_label
+    legacy_subj = (os.environ.get("EMAIL_LEGACY_SUBJECT") or "").strip().lower() in ("1", "true", "yes")
+    subject = (SUBJECT_PREFIX + week_label) if legacy_subj else f"Weekly Pulse + Fee Explainer — {week_label}"
     to_addr = (args.recipient or config["EMAIL_RECIPIENT"] or from_addr).strip()
 
-    body_plain, body_md = build_body_content(pulse_path, args.recipient_name)
+    body_plain, body_md = build_body_content(pulse_path, args.recipient_name, part_b_section_headers=True)
+
+    bundle = build_pulse_bundle(pulse_path, date_str)
+    bundle_path = save_pulse_bundle(bundle, date_str, pulse_md_path=pulse_path)
+    body_plain = body_plain.rstrip() + fee_block_plain(bundle)
+    body_md = body_md.rstrip() + fee_block_markdown(bundle)
+
     msg = build_message(from_addr, to_addr, subject, body_plain, body_md)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -220,6 +245,7 @@ def main():
         f.write(msg.as_bytes())
     print(f"Phase 4 — Email draft")
     print(f"  Pulse: {pulse_path}")
+    print(f"  Bundle: {bundle_path}")
     print(f"  Subject: {subject}")
     print(f"  To: {to_addr}")
     print(f"  Draft written: {eml_path}")

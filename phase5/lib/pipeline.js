@@ -237,7 +237,7 @@ function buildThemesWithReviews(themes, reviews, reviewIdToTheme) {
 }
 
 /** Phase 3: Generate one-pager via Groq */
-async function generateOnePager(themesWithReviews, groqKey) {
+async function generateOnePager(themesWithReviews, groqKey, env) {
   const Groq = (await import("groq-sdk")).default;
   const client = new Groq({ apiKey: groqKey });
 
@@ -264,22 +264,34 @@ ${themeSummary}
 **Sample anonymized quotes (choose from these only):**
 ${quotesBlock}
 
-**REQUIRED OUTPUT FORMAT:**
+**REQUIRED OUTPUT — copy this structure exactly. Every line below shows mandatory markdown.**
+
 ## Weekly One-Page Note
+
 ### Top 3 Themes
-Write exactly 3 themes. For each: theme name, review count in parentheses, then 1–2 sentences on what users are saying.
+1. **Theme label (N reviews):** One or two sentences summarising what users say. Use the real theme names and counts from the theme summary.
+2. **Theme label (N reviews):** One or two sentences.
+3. **Theme label (N reviews):** One or two sentences.
+
 ### 3 User Quotes
-Write exactly 3 user quotes. Use or lightly paraphrase from the sample quotes above. One line per quote.
+Use exactly three lines. Each line MUST start with an asterisk, a space, then a double-quoted string:
+* "First quote here."
+* "Second quote here."
+* "Third quote here."
+
 ### 3 Action Ideas
-Write exactly 3 action ideas. Each must be a concrete, actionable next step for product or support.
+1. **Short action title:** One or two sentences (concrete next step).
+2. **Short action title:** One or two sentences.
+3. **Short action title:** One or two sentences.
+
 ---
-Output ONLY the markdown above. Aim for 300–${MAX_WORDS} words. Professional tone. No extra intro or sign-off.`;
+Rules: Output ONLY from "## Weekly One-Page Note" through the three action items. Keep ### section headers exactly as shown. Do not merge quotes into one paragraph. Do not remove **bold** around theme names or action titles. Aim for 300–${MAX_WORDS} words. Professional tone. No sign-off.`;
 
   const res = await groqWithRetry(client, {
     model: GROQ_MODEL,
     messages: [{ role: "user", content: prompt }],
-    temperature: 0.3,
-    max_tokens: 1024,
+    temperature: 0.25,
+    max_tokens: 2048,
   });
   const raw = (res.choices?.[0]?.message?.content || "").trim();
   if (!raw) throw new Error("Groq returned no text");
@@ -295,10 +307,21 @@ Output ONLY the markdown above. Aim for 300–${MAX_WORDS} words. Professional t
     themeLegend += `## ${t.label || ""}\n${(t.description || "") + "\n"}*${(e.reviews || []).length} reviews*\n\n`;
   }
 
-  return { pulse: contentWithHeader, themeLegend: themeLegend.trim() };
+  const { buildPulseBundleFromMarkdown, feeBlockMarkdown, feeBlockPlain } = await import("./pulseBundle.js");
+  const pulseBundle = await buildPulseBundleFromMarkdown(contentWithHeader, env || process.env);
+  const feeMd = feeBlockMarkdown(pulseBundle);
+  const feePlain = feeBlockPlain(pulseBundle);
+
+  return {
+    pulse: contentWithHeader,
+    themeLegend: themeLegend.trim(),
+    pulseBundle,
+    feeBlockMarkdown: feeMd,
+    feeBlockPlain: feePlain,
+  };
 }
 
-/** Run full pipeline; returns { pulse, themeLegend } */
+/** Run full pipeline; returns { pulse, themeLegend, pulseBundle, feeBlockMarkdown, feeBlockPlain } */
 export async function runNodePipeline(env) {
   const appId = env.APP_ID || APP_ID;
   const weeksBack = Math.max(8, Math.min(12, parseInt(env.WEEKS_BACK || "10", 10) || 10));
@@ -313,6 +336,5 @@ export async function runNodePipeline(env) {
   const themes = await themeDiscovery(texts, groqKey);
   const reviewIdToTheme = await classifyReviews(reviews, themes, groqKey);
   const themesWithReviews = buildThemesWithReviews(themes, reviews, reviewIdToTheme);
-  const { pulse, themeLegend } = await generateOnePager(themesWithReviews, groqKey);
-  return { pulse, themeLegend };
+  return generateOnePager(themesWithReviews, groqKey, env);
 }

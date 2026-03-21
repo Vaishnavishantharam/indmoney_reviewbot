@@ -8,6 +8,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [pulse, setPulse] = useState(null);
   const [themeLegend, setThemeLegend] = useState(null);
+  const [pulseBundle, setPulseBundle] = useState(null);
+  const [feeBlockMarkdown, setFeeBlockMarkdown] = useState("");
+  const [feeBlockPlain, setFeeBlockPlain] = useState("");
   const [error, setError] = useState(null);
   const [emailStatus, setEmailStatus] = useState(null);
   const [triggerStatus, setTriggerStatus] = useState(null);
@@ -19,8 +22,15 @@ export default function Home() {
     setError(null);
     setPulse(null);
     setThemeLegend(null);
-    // Use Vercel API (runs Node pipeline with Gemini only; no Railway/Groq)
-    const apiUrl = "/api/weekly-pulse";
+    setPulseBundle(null);
+    setFeeBlockMarkdown("");
+    setFeeBlockPlain("");
+    // Option A (Vercel + Railway): set NEXT_PUBLIC_BACKEND_URL → use proxy to avoid CORS.
+    const apiUrl =
+      typeof process.env.NEXT_PUBLIC_BACKEND_URL === "string" &&
+      process.env.NEXT_PUBLIC_BACKEND_URL.trim() !== ""
+        ? "/api/proxy-weekly-pulse"
+        : "/api/weekly-pulse";
     try {
       const res = await fetch(apiUrl, {
         method: "POST",
@@ -31,6 +41,9 @@ export default function Home() {
       if (!res.ok) throw new Error(data.error || "Failed to generate pulse");
       setPulse(data.pulse ?? null);
       setThemeLegend(data.themeLegend ?? null);
+      setPulseBundle(data.pulseBundle ?? null);
+      setFeeBlockMarkdown(data.feeBlockMarkdown ?? "");
+      setFeeBlockPlain(data.feeBlockPlain ?? "");
     } catch (e) {
       let msg = e.message || "Failed to generate pulse";
       if (msg === "Failed to fetch" || e.name === "TypeError") {
@@ -76,6 +89,8 @@ export default function Home() {
           recipient: recipient || undefined,
           recipientName: recipientName || undefined,
           pulse: pulse ?? undefined,
+          feeBlockPlain: feeBlockPlain || undefined,
+          pulseBundle: pulseBundle || undefined,
         }),
       });
       const data = await res.json();
@@ -190,7 +205,45 @@ export default function Home() {
             >
               {pulse}
             </ReactMarkdown>
+            {feeBlockMarkdown ? (
+              <ReactMarkdown
+                components={{
+                  h2: ({ node, ...p }) => <h2 style={{ fontSize: "1.1rem", marginTop: 20, marginBottom: 8, fontWeight: 600 }} {...p} />,
+                  p: ({ node, ...p }) => <p style={{ marginBottom: 10 }} {...p} />,
+                  ul: ({ node, ...p }) => <ul style={{ marginBottom: 10, paddingLeft: 20 }} {...p} />,
+                  li: ({ node, ...p }) => <li style={{ marginBottom: 4 }} {...p} />,
+                  strong: ({ node, ...p }) => <strong style={{ fontWeight: 600 }} {...p} />,
+                }}
+              >
+                {feeBlockMarkdown}
+              </ReactMarkdown>
+            ) : null}
           </div>
+          {pulseBundle ? (
+            <button
+              type="button"
+              onClick={() => {
+                const blob = new Blob([JSON.stringify(pulseBundle, null, 2)], { type: "application/json" });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = `pulse_bundle_${pulseBundle.date || "run"}.json`;
+                a.click();
+                URL.revokeObjectURL(a.href);
+              }}
+              style={{
+                marginTop: 12,
+                padding: "8px 14px",
+                borderRadius: 6,
+                border: "1px solid #3f3f46",
+                background: "transparent",
+                color: "#a1a1aa",
+                fontSize: 13,
+                cursor: "pointer",
+              }}
+            >
+              Download pulse_bundle JSON (for Google Doc / MCP)
+            </button>
+          ) : null}
         </section>
       )}
 

@@ -11,6 +11,7 @@ Turn recent **Google Play Store** reviews for **IND Money** into a one-page week
 ## Quick links
 
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** — Phase-wise architecture (ingest → themes → one-pager → email + UI)
+- **[phase4/MCP_GOOGLE_DOC.md](./phase4/MCP_GOOGLE_DOC.md)** — Append `pulse_bundle_*.json` to Google Docs (MCP)
 
 ---
 

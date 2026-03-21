@@ -33,7 +33,7 @@ For a standalone UI to run the pipeline in the browser:
 
    | Variable | Required | Description |
    |----------|----------|-------------|
-   | `NEXT_PUBLIC_BACKEND_URL` | Yes (for Generate) | Backend API URL, e.g. `https://your-app.railway.app` (no trailing slash) |
+   | `NEXT_PUBLIC_BACKEND_URL` | Yes (for Generate) | Backend API URL, e.g. `https://your-app.railway.app` (no trailing slash). When set, the UI calls **`/api/proxy-weekly-pulse`** so the browser never hits Railway directly (CORS). Response includes **`pulseBundle`**, **`feeBlockMarkdown`**, **`feeBlockPlain`** if the backend is up to date. |
    | `EMAIL_SENDER` | For Send email | Your sending email |
    | `EMAIL_PASSWORD` | For Send email | Gmail app password or SMTP password |
    | `SMTP_HOST`, `SMTP_PORT` | Optional | Defaults: Gmail |

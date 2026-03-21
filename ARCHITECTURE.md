@@ -14,10 +14,12 @@ Turn recent Play Store reviews into a **one-page weekly pulse** containing:
 - **Real user quotes** (3, anonymized)
 - **Three action ideas**
 - **Draft email** with this weekly note, sent to self/alias
+- **Fee explanation block** — a fixed scenario (**Mutual Fund Exit Load**): three factual bullets plus source link(s), populated from **public** IND Money fund page data (e.g. exit load text for a configured canonical URL such as [HDFC Mid Cap example](https://www.indmoney.com/mutual-funds/hdfc-mid-cap-fund-direct-plan-growth-option-3097))
+- **Google Doc append** — after each run, a **single combined JSON** document (schema below) is **appended** to a designated Google Doc via **MCP** (Model Context Protocol), e.g. Google Docs MCP in Cursor or an automated worker using the same contract
 
 **Audience:** Product/Growth (what to fix), Support (what users say), Leadership (weekly health pulse).
 
-**Constraints:** Public review exports only; max 5 themes; notes ≤250 words; no PII (no usernames/emails/IDs).
+**Constraints:** Public review exports only; max 5 themes; notes ≤250 words; no PII (no usernames/emails/IDs). Fee content must come from **public** product pages only (no authenticated scraping).
 
 ---
 
@@ -37,22 +39,23 @@ Turn recent Play Store reviews into a **one-page weekly pulse** containing:
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                           ORCHESTRATION / API LAYER                              │
 │  • Validate inputs (date range, appId)                                            │
-│  • Call: Fetch → Themes → One-pager → Email                                       │
-│  • Return: one-pager (MD/PDF), email draft, theme legend                          │
+│  • Call: Fetch → Themes → One-pager → Fee enrich → Bundle JSON → Email + MCP Doc │
+│  • Return: one-pager (MD/PDF), email draft, theme legend, pulse bundle JSON       │
 └─────────────────────────────────────────────────────────────────────────────────┘
               │
               ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                           CORE PIPELINE (Phase 2–4)                              │
 │  Phase 2: Ingest (google-play-scraper) → Phase 3: Theme (Groq) →                  │
-│  Phase 4: One-pager + Email (Groq + templates)                                   │
+│  Phase 4: One-pager + Email (Groq + templates) + Fee block + MCP Google Doc      │
 └─────────────────────────────────────────────────────────────────────────────────┘
               │
               ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                           OUTPUTS                                                │
 │  • reviews.csv / reviews.json (redacted)   • weekly-pulse.md / .pdf              │
-│  • email-draft.txt / screenshot            • theme-legend.md                     │
+│  • email-draft.txt / .eml / screenshot     • theme-legend.md                     │
+│  • output/pulse_bundle_YYYY-MM-DD.json   • Google Doc append (via MCP)           │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -137,23 +140,94 @@ Turn recent Play Store reviews into a **one-page weekly pulse** containing:
 
 ---
 
-### Phase 4 — Email Draft & Send (Optional UI Trigger)
+### Fee explanation — Mutual Fund Exit Load (email enrichment)
 
-**Goal:** Produce a **draft email** (and optionally send it) containing the weekly note.
+**Goal:** Add a **standard support/education block** to the weekly email: **Mutual Fund Exit Load**, with **three short bullets** grounded in **fetched public fund facts** and at least one **source link** (canonical IND Money fund URL).
 
 | Component | Responsibility |
 |-----------|----------------|
-| **Input** | Path to the generated pulse file (e.g. `output/weekly-pulse_YYYY-MM-DD.md`), and config from `.env`. |
-| **Message** | **Subject:** GROWW Weekly Review Pulse -- Week of {date}. **From:** EMAIL_SENDER. **To:** Recipient from caller (`--recipient`) or EMAIL_RECIPIENT, else From. **Body:** Personalised: weekly pulse report contains **"Hi {name of recipient},"** (or "Hi," if no name) then the rest of the email. Multipart (plain + HTML). Plain = text version; HTML = Markdown to HTML. |
+| **Scenario label** | Fixed human-readable title for the block, e.g. `Mutual Fund Exit Load` (maps to `fee_scenario` in the combined JSON). |
+| **Data source** | One or more **configurable public URLs** (default: example fund page pattern `https://www.indmoney.com/mutual-funds/...`). HTTP fetch + parse (e.g. structured data in page, or stable DOM selectors). **No login.** |
+| **Extraction** | Read **exit load** (and closely related fee text if present on the same surface) and normalize into **exactly three** concise bullets (`explanation_bullets[]`). If the page structure changes, fall back to a safe message + link only (document in run logs). |
+| **Email section layout** | After the main weekly pulse body, append a section such as: **Fee explanation — Mutual Fund Exit Load** → Bullet 1 / Bullet 2 / Bullet 3 → **Example / Source:** linked URL(s). Same block in **plain text** and **HTML** parts of Phase 4. |
+| **Storage** | Include the same fields in `output/pulse_bundle_YYYY-MM-DD.json` (see §3.1) for parity with Google Doc MCP. |
+
+**Outcome:** Every email that goes out (or draft `.eml`) includes the exit-load explanation block when fee enrichment is enabled; content is traceable to public source link(s).
+
+---
+
+### Phase 3.1 — Combined weekly bundle (JSON contract)
+
+**Goal:** One **canonical JSON object** per run, used for **Google Doc append (MCP)** and optional API responses. It merges pulse summaries, fee scenario, and metadata.
+
+**Schema (append this object as JSON — pretty-printed or minified per MCP step):**
+
+```json
+{
+  "date": "2026-03-15",
+  "weekly_pulse": {
+    "themes": ["Theme 1", "Theme 2", "Theme 3"],
+    "quotes": ["Quote 1", "Quote 2", "Quote 3"],
+    "action_ideas": ["Action 1", "Action 2", "Action 3"]
+  },
+  "fee_scenario": "Mutual Fund Exit Load",
+  "explanation_bullets": [
+    "Fact 1...",
+    "Fact 2...",
+    "Fact 3..."
+  ],
+  "source_links": ["Link 1", "Link 2"],
+  "last_checked": "2026-03-15"
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `date` | Run date (ISO `YYYY-MM-DD`), aligned with pulse file date. |
+| `weekly_pulse.themes` | Top theme names (typically 3) from Phase 3 output. |
+| `weekly_pulse.quotes` | Three anonymized quotes. |
+| `weekly_pulse.action_ideas` | Three action ideas. |
+| `fee_scenario` | Label for the fee block (e.g. Mutual Fund Exit Load). |
+| `explanation_bullets` | Three bullets from fee fetch / normalization. |
+| `source_links` | Public IND Money (or other) URLs used as sources. |
+| `last_checked` | Date exit-load (or fee) facts were fetched (usually same as `date`). |
+
+**File:** `output/pulse_bundle_YYYY-MM-DD.json` (written on each full run before email send / MCP append).
+
+---
+
+### Google Doc append via MCP
+
+**Goal:** After the bundle JSON is built, **append** it to a **single designated Google Doc** so stakeholders have a running log of weekly pulses + fee blocks.
+
+| Component | Responsibility |
+|-----------|----------------|
+| **MCP** | Use a **Google Docs MCP server** (or equivalent) that can insert text at the end of a document or add a dated section. Invocation may be **manual** (operator runs MCP in Cursor with the JSON) or **automated** (CI/worker with service account + Docs API — still emitting the **same JSON** as the MCP contract). |
+| **Input** | The object in §3.1 (read from `pulse_bundle_YYYY-MM-DD.json` or passed inline). |
+| **Append format** | Recommended: append a **heading** (`## Pulse {date}`), then a **fenced JSON code block** or formatted bullet summary derived from the JSON so the Doc stays human-readable. Raw JSON append is acceptable if the team prefers machine-first logs. |
+| **Config** | Target document ID in env (e.g. `GOOGLE_PULSE_DOC_ID`); MCP connection details outside repo (Cursor MCP config or secrets for Docs API). |
+
+**Outcome:** Google Doc grows by one entry per run; email and Doc stay consistent with the same bundle.
+
+---
+
+### Phase 4 — Email Draft & Send (Optional UI Trigger)
+
+**Goal:** Produce a **draft email** (and optionally send it) containing the weekly note **and** the **fee explanation** block (§ Fee explanation).
+
+| Component | Responsibility |
+|-----------|----------------|
+| **Input** | Path to the generated pulse file (e.g. `output/weekly-pulse_YYYY-MM-DD.md`), **`pulse_bundle_YYYY-MM-DD.json`** (or equivalent in-memory struct; see **Fee explanation** and **§3.1** above), and config from `.env`. |
+| **Message** | **Subject:** GROWW Weekly Review Pulse -- Week of {date}. **From:** EMAIL_SENDER. **To:** Recipient from caller (`--recipient`) or EMAIL_RECIPIENT, else From. **Body:** Personalised: weekly pulse report contains **"Hi {name of recipient},"** (or "Hi," if no name) then the main weekly note. **Then** the **Fee explanation — Mutual Fund Exit Load** section (title + 3 bullets + example/source link(s)). Multipart (plain + HTML). Plain = text version; HTML = Markdown to HTML. |
 | **Dry-run (default)** | Write to `output/weekly-pulse_YYYY-MM-DD.eml`; no SMTP. |
 | **Send mode** | With `--send` and SMTP credentials: send via `smtplib` (TLS). Do not log or store password. |
-| **Config** | EMAIL_SENDER, EMAIL_PASSWORD, SMTP_HOST, SMTP_PORT. EMAIL_RECIPIENT optional. Recipient name: `--recipient-name`. |
+| **Config** | EMAIL_SENDER, EMAIL_PASSWORD, SMTP_HOST, SMTP_PORT. EMAIL_RECIPIENT optional. Recipient name: `--recipient-name`. Optional: `EXIT_LOAD_SOURCE_URL` (or list) for fund page(s) used in fee enrichment. |
 
 **Deliverable:** Draft written to `output/weekly-pulse_YYYY-MM-DD.eml`; optionally sent when `--send` and credentials are used.
 
-**UI integration (Phase 5):** "Send email" can call this phase with recipient (and recipient-name) from the UI; "Generate one-pager" runs pipeline up to Phase 3.
+**UI integration (Phase 5):** "Send email" can call this phase with recipient (and recipient-name) from the UI; "Generate one-pager" runs pipeline up to Phase 3, then fee fetch + bundle JSON before send.
 
-**Outcome:** Email draft (.eml) and optionally sent email to recipient/self.
+**Outcome:** Email draft (.eml) and optionally sent email to recipient/self, **including exit-load bullets and links**.
 
 ---
 
@@ -164,8 +238,8 @@ Turn recent Play Store reviews into a **one-page weekly pulse** containing:
 | Component | Responsibility |
 |-----------|----------------|
 | **Stack** | Simple stack: e.g. **Next.js** (or Express + React/Vite) for UI; shared Node services for pipeline. |
-| **UI flows** | 1) **Generate Pulse:** date range (or “last 10 weeks”), then “Run” → progress → download/view one-pager (MD/PDF). 2) **Send Email:** same + “Send to my email” → backend sends or saves draft and shows confirmation. |
-| **Backend API** | `POST /api/weekly-pulse` — runs fetch + themes + one-pager; returns one-pager text + theme legend. `POST /api/send-email` — takes one-pager (or run id), sends/saves draft. |
+| **UI flows** | 1) **Generate Pulse:** date range (or “last 10 weeks”), then “Run” → progress → download/view one-pager (MD/PDF) + **pulse bundle JSON**. 2) **Send Email:** includes **fee explanation** block. 3) Optional: **“Copy for Google Doc / MCP”** — exposes or downloads `pulse_bundle_YYYY-MM-DD.json` for append via MCP. |
+| **Backend API** | `POST /api/weekly-pulse` — runs fetch + themes + one-pager + **fee enrichment** + **bundle JSON**; returns one-pager text, theme legend, and JSON payload. `POST /api/send-email` — takes bundle or run id, sends/saves draft **with fee section**. |
 | **Security** | No auth required for prototype; for production, add API key or login. Env-based config (e.g. `GROQ_API_KEY`, `APP_ID`, `SEND_TO_ALIAS`). |
 | **State** | Optional “last run” cache so “Send email” can reuse last one-pager without re-running full pipeline. |
 
@@ -189,7 +263,7 @@ Turn recent Play Store reviews into a **one-page weekly pulse** containing:
 |-----------|----------------|
 | **Script** | `scripts/scheduler.py` (Python; uses APScheduler). Run from repo root: `python3 scripts/scheduler.py`; keep process running (e.g. tmux/screen or systemd). Use `--run-now` to run the pipeline once and send email (for testing). |
 | **Schedule** | Every **Sunday 9:45 PM CST** (America/Chicago). |
-| **Pipeline** | Same as CLI: Phase 1 → 2a → 2b → 3 → 4 (fetch, themes, classify, one-pager, send email). No Node required; runs Python phases directly. |
+| **Pipeline** | Same as CLI: Phase 1 → 2a → 2b → 3 → **fee enrich + pulse_bundle JSON** → 4 (send email). **Google Doc:** operator or automation appends bundle via MCP per § Google Doc append. No Node required for core Python path. |
 | **Review scope** | **8 weeks**, **max 1000 reviews** (`WEEKS_BACK=8`, `MAX_REVIEWS=1000` set by scheduler for each run). |
 | **Recipient** | Fixed: **vaishnavishantharam09@gmail.com** (and recipient name for personalisation). |
 
@@ -199,7 +273,7 @@ Turn recent Play Store reviews into a **one-page weekly pulse** containing:
 |-----------|----------------|
 | **Workflow** | `.github/workflows/weekly-pulse.yml` — triggers every **Monday 03:45 UTC** (Sunday 9:45 PM CST) and on `workflow_dispatch` (manual run from Actions tab). |
 | **Runner** | `ubuntu-latest`; Python 3.11; `pip install -r requirements.txt`; then Phase 1 → 2a → 2b → 3 → 4. |
-| **Secrets** | In repo **Settings → Secrets and variables → Actions**, add: `GROQ_API_KEY`, `GEMINI_API_KEY`, `EMAIL_SENDER`, `EMAIL_PASSWORD`. Optional: `SMTP_HOST`, `SMTP_PORT` (defaults: Gmail). |
+| **Secrets** | In repo **Settings → Secrets and variables → Actions**, add: `GROQ_API_KEY`, `GEMINI_API_KEY`, `EMAIL_SENDER`, `EMAIL_PASSWORD`. Optional: `SMTP_HOST`, `SMTP_PORT` (defaults: Gmail), `EXIT_LOAD_SOURCE_URL`, `GOOGLE_PULSE_DOC_ID` (if a future job appends to Docs via API). **MCP** Google Doc steps are typically local/Cursor unless wired to a service account job. |
 | **Recipient** | Same fixed recipient: vaishnavishantharam09@gmail.com. |
 
 **Outcome:** Weekly pulse generated and emailed automatically every week at 9:45 PM CST (local scheduler or GitHub Actions).
@@ -228,7 +302,9 @@ Turn recent Play Store reviews into a **one-page weekly pulse** containing:
 | **API / orchestration** | Express or Next.js API routes |
 | **UI** | Next.js (or Express + React/Vite) |
 | **Email** | Nodemailer (SMTP) or Gmail API; draft fallback to file |
-| **Output formats** | Markdown (primary), optional PDF (e.g. `md-to-pdf`), CSV/JSON (redacted) |
+| **Output formats** | Markdown (primary), optional PDF (e.g. `md-to-pdf`), CSV/JSON (redacted), **`pulse_bundle_*.json`** |
+| **Fee source** | HTTP fetch of public IND Money fund URLs; configurable `EXIT_LOAD_SOURCE_URL` |
+| **Google Docs** | MCP (Google Docs) or Docs API worker; same JSON contract as §3.1 |
 
 ---
 
@@ -256,9 +332,10 @@ indmoney_reviewbot-1/
 │   └── README.md
 ├── phase3/                   # One-page weekly note (Groq)
 │   └── README.md
-├── phase4/                   # Email draft & send
+├── phase4/                   # Email draft & send (+ fee block from bundle)
 │   ├── draft_email.py
 │   └── README.md
+├── (planned) phase_fee/ or phase4/fee_exit_load.py  # Fetch exit load from public fund URL → bullets
 ├── web_ui.py                 # Python Web UI (Flask); run: python3 web_ui.py → http://127.0.0.1:5000
 ├── templates/
 │   └── weekly_ui.html        # Single-page UI (Generate one-pager, Send email)
@@ -268,7 +345,8 @@ indmoney_reviewbot-1/
 │   └── README.md
 ├── reviews/                  # Phase 1 output
 ├── themes/                   # Phase 2 output
-├── output/                   # weekly-pulse, email-draft, theme-legend
+├── output/                   # weekly-pulse, email-draft, theme-legend, pulse_bundle_*.json
+├── .cursor/                  # optional: mcp.json for Google Docs MCP (local only; not committed with secrets)
 ├── .github/
 │   └── workflows/
 │       └── weekly-pulse.yml  # GitHub Actions: Sunday 9:45 PM CST (Monday 03:45 UTC); same pipeline, secrets for keys/email
@@ -294,12 +372,15 @@ indmoney_reviewbot-1/
 | `EMAIL_PASSWORD` | SMTP password (e.g. Gmail App Password); never logged or stored |
 | `SMTP_HOST`, `SMTP_PORT` | SMTP server (Phase 4 send mode); TLS used |
 | `EMAIL_RECIPIENT` | Default recipient when not supplied by CLI/API (optional) |
+| `EXIT_LOAD_SOURCE_URL` | Public IND Money mutual-fund URL(s) for exit-load extraction (comma-separated if multiple) |
+| `GOOGLE_PULSE_DOC_ID` | Target Google Doc ID for MCP/append (optional; used by automation or documented for operators) |
 ---
 
 ## 7. Security & Compliance
 
 - **No PII:** Do not store or pass usernames, emails, or user IDs in reviews, themes, one-pager, or email.
-- **Public data only:** Use only public Play Store data via `google-play-scraper`; no scraping behind logins.
+- **Public data only:** Use only public Play Store data via `google-play-scraper`; no scraping behind logins. Fee/exit-load text only from **public** product pages.
+- **Google Doc / MCP:** Doc IDs and OAuth tokens stay in env or local MCP config; do not commit credentials.
 - **Secrets:** All keys and SMTP credentials in env; `.env` in `.gitignore`.
 
 ---
@@ -309,11 +390,12 @@ indmoney_reviewbot-1/
 - [ ] Reviews from last 8–12 weeks imported (rating, title, text, date) via `google-play-scraper`.
 - [ ] Reviews grouped into 3–5 LLM-generated themes.
 - [ ] One-page weekly note (≤250 words): top 3 themes, 3 quotes, 3 action ideas; no PII.
-- [ ] Email draft (and optional send to self/alias).
+- [ ] Email draft (and optional send to self/alias) **including Mutual Fund Exit Load section** (3 bullets + source link(s)).
+- [ ] **`pulse_bundle_YYYY-MM-DD.json`** produced each run; **Google Doc** updated via MCP (or documented manual append) using §3.1 schema.
 - [ ] UI to trigger “Generate one-pager” and “Send email” (in addition to CLI).
 - [ ] README: re-run instructions + theme legend.
 - [ ] Deliverables: prototype link or demo video, weekly note (MD/PDF), email draft (screenshot/text), sample reviews (CSV/JSON redacted).
 
 ---
 
-*Document version: 1.0 — IND Money Weekly Review Pulse, Groq, google-play-scraper.*
+*Document version: 1.1 — IND Money Weekly Review Pulse; adds exit-load fee email block, pulse bundle JSON, and Google Doc append via MCP.*

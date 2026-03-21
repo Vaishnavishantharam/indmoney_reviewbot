@@ -25,6 +25,8 @@ from web_ui import (
     get_python,
     has_grouped_themes,
     read_latest_pulse_and_legend,
+    enrich_with_pulse_bundle,
+    get_latest_pulse_md_path,
 )
 
 
@@ -60,7 +62,7 @@ def index():
         service="GROWW Weekly Pulse API",
         docs={
             "health": "GET /health",
-            "weekly_pulse": "POST /api/weekly-pulse (body: {\"weeksBack\": 10})",
+            "weekly_pulse": "POST /api/weekly-pulse (body: {\"weeksBack\": 10}) → pulse, themeLegend, pulseBundle, feeBlockMarkdown, feeBlockPlain",
         },
     )
 
@@ -105,20 +107,24 @@ def api_weekly_pulse():
         pulse, theme_legend = read_latest_pulse_and_legend()
         if not pulse:
             return jsonify(error="No weekly pulse generated"), 500
+        bundle_extra = enrich_with_pulse_bundle(get_latest_pulse_md_path(), env)
         return jsonify(
             pulse=pulse,
             themeLegend=theme_legend or "",
             fromFallback=used_fallback,
+            **bundle_extra,
         )
     except RuntimeError as e:
         err_msg = _nice_error(str(e))
         pulse, theme_legend = read_latest_pulse_and_legend()
         if pulse:
+            bundle_extra = enrich_with_pulse_bundle(get_latest_pulse_md_path(), env)
             return jsonify(
                 pulse=pulse,
                 themeLegend=theme_legend or "",
                 fromFallback=True,
                 error=f"Regeneration failed: {err_msg}. Showing last saved one-pager.",
+                **bundle_extra,
             )
         return jsonify(error=err_msg), 500
     except Exception as e:

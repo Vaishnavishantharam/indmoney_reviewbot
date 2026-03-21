@@ -39,6 +39,15 @@ export async function POST(request) {
   const recipient = body.recipient?.trim();
   const recipientName = body.recipientName?.trim();
   const pulse = body.pulse?.trim();
+  let feeBlockPlain = (body.feeBlockPlain && String(body.feeBlockPlain).trim()) || "";
+  if (!feeBlockPlain && body.pulseBundle) {
+    try {
+      const { feeBlockPlain: fp } = await import("../../../lib/pulseBundle.js");
+      feeBlockPlain = fp(body.pulseBundle);
+    } catch {
+      /* ignore */
+    }
+  }
 
   if (isVercelOrNoPipeline()) {
     try {
@@ -71,12 +80,19 @@ export async function POST(request) {
         ...(port === 587 && { requireTLS: true }),
       });
       const greeting = recipientName ? `Hi ${recipientName},\n\n` : "Hi,\n\n";
-      const text = greeting + pulse;
+      const weeklyHeader = "WEEKLY PULSE\n\n";
+      const text =
+        greeting + weeklyHeader + pulse + (feeBlockPlain ? "\n" + feeBlockPlain : "");
       const dateLabel = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      const legacySubj = (process.env.EMAIL_LEGACY_SUBJECT || "").toLowerCase();
+      const subject =
+        legacySubj === "1" || legacySubj === "true"
+          ? `GROWW Weekly Review Pulse -- ${dateLabel}`
+          : `Weekly Pulse + Fee Explainer — ${dateLabel}`;
       await transporter.sendMail({
         from: sender,
         to,
-        subject: `GROWW Weekly Review Pulse -- ${dateLabel}`,
+        subject,
         text,
       });
       return Response.json({ sent: true });

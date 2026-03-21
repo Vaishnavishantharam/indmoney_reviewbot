@@ -34,7 +34,7 @@ Then open **http://localhost:3000**.
 2. **Send email** — Optionally enter recipient email and name, then “Send email to me”. Calls Phase 4 with `--send` (uses `.env` from repo root for SMTP).
 
 **APIs:**
-- `POST /api/weekly-pulse` — body: `{ weeksBack?: number }`. Runs full pipeline, returns `{ pulse, themeLegend }`.
+- `POST /api/weekly-pulse` — body: `{ weeksBack?: number }`. Runs full pipeline, returns `{ pulse, themeLegend, pulseBundle, feeBlockMarkdown, feeBlockPlain }` (exit-load block + JSON for MCP).
 - `POST /api/send-email` — body: `{ recipient?: string, recipientName?: string }`. Sends email via Phase 4.
 
 Ensure `.env` is in the **repo root** (not in phase5); the API loads it when running the Python scripts.

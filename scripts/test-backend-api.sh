@@ -31,9 +31,15 @@ RESP=$(curl -s -w "\n%{http_code}" --max-time 180 -X POST "$BASE_URL/api/weekly-
 HTTP_CODE=$(echo "$RESP" | tail -n1)
 BODY=$(echo "$RESP" | sed '$d')
 echo "HTTP $HTTP_CODE"
-if echo "$BODY" | head -c 200 | grep -q "pulse"; then
-  echo "OK — response has 'pulse' key. First 300 chars:"
-  echo "$BODY" | head -c 300
+if echo "$BODY" | head -c 400 | grep -q '"pulse"'; then
+  echo "OK — response has pulse JSON field."
+  if echo "$BODY" | grep -q '"pulseBundle"'; then
+    echo "OK — pulseBundle present (exit load + weekly_pulse schema)."
+  else
+    echo "Note: no pulseBundle (older backend?). Redeploy api_server with latest web_ui."
+  fi
+  echo "First 400 chars:"
+  echo "$BODY" | head -c 400
   echo "..."
 else
   echo "Response body:"
